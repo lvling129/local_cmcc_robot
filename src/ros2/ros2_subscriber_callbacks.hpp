@@ -26,15 +26,6 @@ void WakeUpResultCallback(const std_msgs::msg::String::SharedPtr msg);
 void TouchWakeupCallback(const std_msgs::msg::String::SharedPtr msg);
 
 /**
- * @brief 声纹降噪开关话题回调
- * @param msg 话题消息，JSON格式: {"status": true/false}
- * @note 话题名: /voiceprint/switcher
- *       status=true: 声纹降噪已开启，跳过PCM发送给豆包
- *       status=false: 声纹降噪已关闭，正常发送PCM给豆包
- */
-void VoiceprintSwitcherCallback(const std_msgs::msg::String::SharedPtr msg);
-
-/**
  * @brief AVVTN休眠话题回调
  * @param msg 话题消息
  * @note 话题名: /avvtn_sleep

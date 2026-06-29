@@ -246,8 +246,7 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
         // 这路数据与 AIUI 取同一份，AVVTN 多模态 VAD 已过滤静音与环境噪声，
         // 豆包云端只需专注于ASR + 对话生成。
         // 格式: 16k mono S16LE, topic: /avvtn/mic_pcm
-        // 当声纹降噪开启时（is_voiceprint_active_=true），跳过PCM发送
-        if (!is_voiceprint_active_ && data_p->data != nullptr && data_p->data_size > 0)
+        if (data_p->data != nullptr && data_p->data_size > 0)
         {
             ROSManager::getInstance().publishMicPcm(
                 static_cast<const uint8_t *>(data_p->data),
@@ -259,7 +258,7 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
         // 但 REC 路径已被 AVVTN VAD 过滤静音，云端永远听不到静音。
         // 这里末包后主动补发 1.6s 静音 PCM（超过 1500ms 阈值）触发云端 VAD 判 EOS。
         // 静音分块发送（1 包×100ms = 3200B = 1600 个 S16LE 样本 × 16 包）。
-        if (!is_voiceprint_active_ && vad_status == 3)
+        if (vad_status == 3)
         {
             constexpr size_t kSilenceChunkBytes = 3200;     // 100ms @ 16k mono S16LE
             constexpr int    kSilenceChunkCount = 16;       // 16 × 100ms = 1600ms

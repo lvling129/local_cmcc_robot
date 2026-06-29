@@ -70,12 +70,6 @@ public:
     void handleTouchWake();
 
     /**
-     * @brief 设置声纹降噪开关状态
-     * @param active true=声纹降噪已开启（跳过PCM发送），false=已关闭（正常发送）
-     */
-    void setVoiceprintActive(bool active) { is_voiceprint_active_ = active; }
-
-    /**
      * @brief 设置休眠状态
      * @param sleeping true=进入休眠，false=唤醒
      */
@@ -302,7 +296,6 @@ private:
     bool is_knowledge = false;  //是否命中知识库
     bool is_playing;            //播放器是否正在播放
     bool is_sleeping = true;           //是否已经休眠，等待唤醒
-    bool is_voiceprint_active_ = false;  //声纹降噪开关状态，true=已开启（跳过PCM发送），false=已关闭（正常发送）
 };
 
 #endif
