@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # 固定绝对路径，避免从任意目录调用时行为不一致
-APP_DIR="/home/nvidia/cmcc_voice_bot/bin"
+APP_DIR="/home/nvidia/local_cmcc_robot/bin"
 PROGRAM_NAME="robot_avvtn"
 PROGRAM_PATH="${APP_DIR}/${PROGRAM_NAME}"
 PID_FILE="${APP_DIR}/${PROGRAM_NAME}.pid"

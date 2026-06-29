@@ -1,8 +1,8 @@
 #!/bin/bash
 set -u
 
-APP_DIR="/home/nvidia/cmcc_voice_bot/bin"
-BUILD_DIR="/home/nvidia/cmcc_voice_bot/build/src"
+APP_DIR="/home/nvidia/local_cmcc_robot/bin"
+BUILD_DIR="/home/nvidia/local_cmcc_robot/build/src"
 PROGRAM_NAME="robot_avvtn"
 PROGRAM_PATH_BIN="${APP_DIR}/${PROGRAM_NAME}"
 PROGRAM_PATH_BUILD="${BUILD_DIR}/${PROGRAM_NAME}"
@@ -19,8 +19,8 @@ echo_color() {
 }
 
 # 仅将以下两个可执行文件视为目标进程：
-# 1) /home/nvidia/cmcc_voice_bot/bin/robot_avvtn
-# 2) /home/nvidia/cmcc_voice_bot/build/src/robot_avvtn
+# 1) /home/nvidia/local_cmcc_robot/bin/robot_avvtn
+# 2) /home/nvidia/local_cmcc_robot/build/src/robot_avvtn
 is_target_process() {
     local pid="$1"
     local exe_path

@@ -88,7 +88,7 @@ int main(int argc, char const *argv[])
     // 5. 初始化AvvtnCapture
     AvvtnCapture capture;
 
-    int ret = capture.Init("/home/nvidia/cmcc_voice_bot/avvtn.cfg", "/home/nvidia/cmcc_voice_bot/resource/aiui/aiui.cfg");
+    int ret = capture.Init("/home/nvidia/local_cmcc_robot/avvtn.cfg", "/home/nvidia/local_cmcc_robot/resource/aiui/aiui.cfg");
     if (ret != 0)
     {
         LOG_FATAL("Avvtn capture init Error");
