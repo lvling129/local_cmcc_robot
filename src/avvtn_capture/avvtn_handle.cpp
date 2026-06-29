@@ -3,7 +3,6 @@
 #include "utils/json.hpp"
 #include "ros2/ros_manager.hpp"
 #include <cstdlib>
-#include <vector>
 
 int AvvtnCapture::test_evaluate_keyword(const char *keyword)
 {
@@ -241,34 +240,6 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
         {
             // aiui_wrapper_.WriteAudio((const char *)data_p->data, data_p->data_size, false);
         }
-
-        // 同步广播 AEC + VAD 后的干净语音给豆包 Python 子系统。
-        // 这路数据与 AIUI 取同一份，AVVTN 多模态 VAD 已过滤静音与环境噪声，
-        // 豆包云端只需专注于ASR + 对话生成。
-        // 格式: 16k mono S16LE, topic: /avvtn/mic_pcm
-        if (data_p->data != nullptr && data_p->data_size > 0)
-        {
-            ROSManager::getInstance().publishMicPcm(
-                static_cast<const uint8_t *>(data_p->data),
-                static_cast<size_t>(data_p->data_size));
-        }
-
-        // 【关键】vad_status==3 是 AVVTN 判定的一句话结束。
-        // 豆包云端 ASR 靠 eos_silence_timeout=1500ms 连续静音才会下发 event=459。
-        // 但 REC 路径已被 AVVTN VAD 过滤静音，云端永远听不到静音。
-        // 这里末包后主动补发 1.6s 静音 PCM（超过 1500ms 阈值）触发云端 VAD 判 EOS。
-        // 静音分块发送（1 包×100ms = 3200B = 1600 个 S16LE 样本 × 16 包）。
-        if (vad_status == 3)
-        {
-            constexpr size_t kSilenceChunkBytes = 3200;     // 100ms @ 16k mono S16LE
-            constexpr int    kSilenceChunkCount = 16;       // 16 × 100ms = 1600ms
-            static const std::vector<uint8_t> kSilence(kSilenceChunkBytes, 0);
-            for (int i = 0; i < kSilenceChunkCount; ++i)
-            {
-                ROSManager::getInstance().publishMicPcm(kSilence.data(), kSilence.size());
-            }
-            LOG_DEBUG("VAD 末包: 已补发 %dms 静音触发豆包云端 EOS", kSilenceChunkCount * 100);
-        }
     }
 
 // 保存音频文件
@@ -386,10 +357,7 @@ void AvvtnCapture::handleAudioWake(avvtn_callback_data_t *data_p)
 
     // 发布唤醒事件到 /voice_wakeup 话题
     ROSManager::getInstance().publishVoiceWakeup(wake_str);
-
-    // 发布文本“灵犀灵犀”到 /doubao_chat_text_query，触发豆包大模型对话
-    ROSManager::getInstance().publishDoubaoChatQuery("灵犀灵犀");
-
+    
     std::cout << "接收到唤醒事件: " << wake_str << std::endl;
     return;
 }
