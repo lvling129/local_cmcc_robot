@@ -246,49 +246,36 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
     }
 */
 
-    if (!is_sleeping) {
-        // 将音频数据喂给 sherpa-onnx 本地 ASR
-        if (data_p->data && data_p->data_size > 0 && sherpa_asr_.IsInitialized()) {
-            if (vad_status == 3)
-            {
-                // 先把当前帧喂入（避免丢失最后一帧有效语音）
-                sherpa_asr_.FeedAudio(
-                    reinterpret_cast<const int16_t*>(data_p->data),
-                    data_p->data_size);
+    if (!is_sleeping && sherpa_asr_.IsInitialized()) {
+        if (vad_status == 3)
+        {
+            // VAD 结束（当前帧为空，无需 FeedAudio）
+            // 将累积的整句音频一次性送入并解码
+            sherpa_asr_.FinalizeAudio();
 
-                // VAD 结束：刷出缓冲 + 发送静音 + 通知识别器输入结束
-                sherpa_asr_.FinalizeAudio();
+            // 获取最终识别结果并发布
+            std::string final_text = sherpa_asr_.GetResult();
+            if (!final_text.empty()) {
+                LOG_INFO("SenseVoice 识别结果: %s", final_text.c_str());
 
-                // 获取最终识别结果并发布
-                std::string final_text = sherpa_asr_.GetResult();
-                if (!final_text.empty()) {
-                    LOG_INFO("sherpa-onnx 识别结果: %s", final_text.c_str());
-
-                    // 发布到 ROS2 话题
-                    nlohmann::json ask = {
-                        {"speaker", "person"},
-                        {"text", final_text}
-                    };
-                    ROSManager::getInstance().publishChatHistory(ask.dump());
-                    ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
-                }
-                // 重置识别状态，准备下一句
-                sherpa_asr_.Reset();
-                LOG_INFO("VAD结束，重置 sherpa-onnx 识别状态");
+                // 发布到 ROS2 话题
+                nlohmann::json ask = {
+                    {"speaker", "person"},
+                    {"text", final_text}
+                };
+                ROSManager::getInstance().publishChatHistory(ask.dump());
+                ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
             }
-            else
-            {
-                // 正常音频，喂入识别器
-                sherpa_asr_.FeedAudio(
-                    reinterpret_cast<const int16_t*>(data_p->data),
-                    data_p->data_size);
-
-                // 获取实时识别结果（用于调试）
-                std::string text = sherpa_asr_.GetResult();
-                if (!text.empty()) {
-                    LOG_DEBUG("sherpa-onnx 实时识别: %s", text.c_str());
-                }
-            }
+            // 重置识别状态，准备下一句
+            sherpa_asr_.Reset();
+            LOG_INFO("VAD结束，重置 SenseVoice 识别状态");
+        }
+        else if (data_p->data && data_p->data_size > 0)
+        {
+            // 正常音频，累积到 utterance_buffer_
+            sherpa_asr_.FeedAudio(
+                reinterpret_cast<const int16_t*>(data_p->data),
+                data_p->data_size);
         }
     }
 
