@@ -18,6 +18,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../include
   ${CMAKE_CURRENT_LIST_DIR}/utils/jsoncpp
   ${CMAKE_CURRENT_LIST_DIR}
+  ${CMAKE_SOURCE_DIR}/sherpa-onnx/install/include
 )
 
 # 设置编译选项
@@ -25,7 +26,10 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   "-DMIC_NUM=${MIC_NUM}"
 )
 
-target_link_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/lib/arm)
+target_link_directories(${PROJECT_NAME} PRIVATE
+  ${CMAKE_SOURCE_DIR}/lib/arm
+  ${CMAKE_SOURCE_DIR}/sherpa-onnx/install/lib
+)
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}
@@ -34,7 +38,19 @@ target_link_libraries(${PROJECT_NAME}
   portaudio
   avvtn_mic${MIC_NUM}
   aiui
+  sherpa-onnx-c-api
+  sherpa-onnx-cxx-api
+  sherpa-onnx-core
+  sherpa-onnx-fst
+  sherpa-onnx-fstfar
+  sherpa-onnx-kaldifst-core
+  kaldi-decoder-core
+  kaldi-native-fbank-core
+  kissfft-float
+  ssentencepiece_core
+  onnxruntime
   pthread
+  dl
 )
 
 # 添加：在构建完成后复制可执行文件到根目录的 bin 目录

@@ -2,6 +2,8 @@
 #include "utils/Logger.hpp"
 #include "ros2/ros_manager.hpp"
 
+#include <cstdlib>
+
 AvvtnCapture* AvvtnCapture::g_avvtn_capture_instance = nullptr;
 
 // 初始化类静态成员（必须在类外初始化）
@@ -162,12 +164,42 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
     // 初始化pcm播放器回调
     aiui_pcm_player_set_callbacks(onStarted, onPaused, onResumed, onStopped, onProgress, onError);
 
-    // 3、初始化视频采集
+    // 3、初始化 sherpa-onnx 本地 ASR
+    LOG_INFO("初始化 sherpa-onnx 本地 ASR");
+    std::string project_dir = avvtn_cfg_path.substr(0, avvtn_cfg_path.find_last_of('/'));
+
+    // 通过环境变量 ASR_MODEL 选择模型：sensevoice 或 paraformer（默认）
+    const char* asr_model_env = std::getenv("ASR_MODEL");
+    std::string asr_model_str = asr_model_env ? asr_model_env : "paraformer";
+    std::string asr_model_dir;
+    AsrModelType asr_type;
+
+    if (asr_model_str == "sensevoice") {
+        asr_model_dir = project_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
+        asr_type = AsrModelType::kOfflineSenseVoice;
+        LOG_INFO("选择 ASR 模型: SenseVoice [离线]");
+    } else {
+        asr_model_dir = project_dir + "/sherpa-onnx-streaming-paraformer-bilingual-zh-en";
+        asr_type = AsrModelType::kOnlineParaformer;
+        LOG_INFO("选择 ASR 模型: Paraformer [流式]");
+    }
+
+    ret = sherpa_asr_.Init(asr_model_dir, asr_type);
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化 sherpa-onnx ASR 失败");
+    }
+    else
+    {
+        LOG_INFO("初始化 sherpa-onnx ASR 成功");
+    }
+
+    // 4、初始化视频采集
     // ret = video_cap_.Start(this, videoCaptureCallback);
     // CHECK_RET(ret);
 
     LOG_INFO("初始化音频采集");
-    // 4、初始化音频采集
+    // 5、初始化音频采集
     ret = audio_cap_.Start(this, audioCaptureCallback);
     CHECK_RET(ret);
     if (0 != ret)
@@ -206,7 +238,10 @@ int AvvtnCapture::Destory()
     // 3、销毁多模态降噪引擎
     avvtn_api_destroy(avvtn_cap_);
 
-    // 4、销毁AIUI
+    // 4、销毁 sherpa-onnx ASR
+    sherpa_asr_.Destroy();
+
+    // 5、销毁AIUI
     aiui_wrapper_.Destory();
     return 0;
 }

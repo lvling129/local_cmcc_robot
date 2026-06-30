@@ -59,3 +59,10 @@ __pycache__/
 __MACOSX/
 .DS_Store
 ._*
+
+# sherpa-onnx source and build artifacts
+/sherpa-onnx/
+
+# ASR model directories (large files, not version controlled)
+/sherpa-onnx-streaming-paraformer-bilingual-zh-en/
+/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/

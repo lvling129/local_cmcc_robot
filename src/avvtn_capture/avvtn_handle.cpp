@@ -3,6 +3,7 @@
 #include "utils/json.hpp"
 #include "ros2/ros_manager.hpp"
 #include <cstdlib>
+#include <chrono>
 
 int AvvtnCapture::test_evaluate_keyword(const char *keyword)
 {
@@ -230,15 +231,64 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
     }
     cJSON_Delete(json);
 
+    // 打印音频回调间隔和数据量（用于确认发送周期）
+    // 调试用，后续删除，包含#include <chrono>
+/*
+    {
+        static auto last_time = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        auto interval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count();
+        last_time = now;
+        // 16kHz mono S16LE: 1ms = 32字节
+        int audio_duration_ms = data_p->data_size / 32;
+        LOG_INFO("REC音频回调: data_size=%d, 音频时长=%dms, channel=%d, vad_status=%d, 回调间隔=%lldms",
+                 data_p->data_size, audio_duration_ms, channel, vad_status, interval_ms);
+    }
+*/
+
     if (!is_sleeping) {
-        LOG_DEBUG("发送识别音频数据给AIUI");
-        if (vad_status == 3)
-        {
-            // aiui_wrapper_.WriteAudio(nullptr, 0, true);
-        }
-        else
-        {
-            // aiui_wrapper_.WriteAudio((const char *)data_p->data, data_p->data_size, false);
+        // 将音频数据喂给 sherpa-onnx 本地 ASR
+        if (data_p->data && data_p->data_size > 0 && sherpa_asr_.IsInitialized()) {
+            if (vad_status == 3)
+            {
+                // 先把当前帧喂入（避免丢失最后一帧有效语音）
+                sherpa_asr_.FeedAudio(
+                    reinterpret_cast<const int16_t*>(data_p->data),
+                    data_p->data_size);
+
+                // VAD 结束：刷出缓冲 + 发送静音 + 通知识别器输入结束
+                sherpa_asr_.FinalizeAudio();
+
+                // 获取最终识别结果并发布
+                std::string final_text = sherpa_asr_.GetResult();
+                if (!final_text.empty()) {
+                    LOG_INFO("sherpa-onnx 识别结果: %s", final_text.c_str());
+
+                    // 发布到 ROS2 话题
+                    nlohmann::json ask = {
+                        {"speaker", "person"},
+                        {"text", final_text}
+                    };
+                    ROSManager::getInstance().publishChatHistory(ask.dump());
+                    ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
+                }
+                // 重置识别状态，准备下一句
+                sherpa_asr_.Reset();
+                LOG_INFO("VAD结束，重置 sherpa-onnx 识别状态");
+            }
+            else
+            {
+                // 正常音频，喂入识别器
+                sherpa_asr_.FeedAudio(
+                    reinterpret_cast<const int16_t*>(data_p->data),
+                    data_p->data_size);
+
+                // 获取实时识别结果（用于调试）
+                std::string text = sherpa_asr_.GetResult();
+                if (!text.empty()) {
+                    LOG_DEBUG("sherpa-onnx 实时识别: %s", text.c_str());
+                }
+            }
         }
     }
 

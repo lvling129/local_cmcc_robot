@@ -13,6 +13,7 @@
 
 #include "aiui_capture/aiui_wapper.h"
 #include "audio_capture/audio_capture.h"
+#include "asr/sherpa_asr.h"
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
 #include "video_capture/video_capture.h"
@@ -275,6 +276,9 @@ private:
 
     // AIUI句柄，用于处理语音识别和合成
     AiuiWrapper aiui_wrapper_;
+
+    // sherpa-onnx 本地流式 ASR
+    SherpaAsr sherpa_asr_;
 
 private:
     int scaling_factor_ = 2;    // 缩放因子
