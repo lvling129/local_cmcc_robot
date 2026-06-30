@@ -242,10 +242,10 @@ std::string SherpaAsr::GetResult()
 
         // 打印 SenseVoice 额外字段
         LOG_INFO("SenseVoice 识别结果:");
-        LOG_INFO("  text:    %s", result->text[0] ? result->text : "(空)");
-        LOG_INFO("  lang:    %s", result->lang ? result->lang : "(无)");
-        LOG_INFO("  emotion: %s", result->emotion ? result->emotion : "(无)");
-        LOG_INFO("  event:   %s", result->event ? result->event : "(无)");
+        LOG_INFO("  文本:   %s", result->text[0] ? result->text : "(空)");
+        LOG_INFO("  语言:   %s", result->lang ? result->lang : "(无)");
+        LOG_INFO("  情感:   %s", result->emotion ? result->emotion : "(无)");
+        LOG_INFO("  事件:   %s", result->event ? result->event : "(无)");
 
         std::string text(result->text);
         SherpaOnnxDestroyOfflineRecognizerResult(result);
