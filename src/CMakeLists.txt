@@ -36,11 +36,15 @@ target_link_libraries(${PROJECT_NAME}
   ${OpenCV_LIBS}
   udev
   portaudio
+  asound
   avvtn_mic${MIC_NUM}
   aiui
   sherpa-onnx-c-api
   sherpa-onnx-cxx-api
   sherpa-onnx-core
+  piper_phonemize
+  espeak-ng
+  ucd
   sherpa-onnx-fst
   sherpa-onnx-fstfar
   sherpa-onnx-kaldifst-core

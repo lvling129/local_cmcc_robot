@@ -265,6 +265,10 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                 };
                 ROSManager::getInstance().publishChatHistory(ask.dump());
                 ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
+
+                // TODO: 将 ASR 结果发送给大模型，获取回复后调用 Speak()
+                // 目前回显 ASR 结果用于测试 TTS
+                Speak(final_text);
             }
             // 重置识别状态，准备下一句
             sherpa_asr_.Reset();

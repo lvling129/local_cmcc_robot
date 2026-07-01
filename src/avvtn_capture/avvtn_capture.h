@@ -14,6 +14,8 @@
 #include "aiui_capture/aiui_wapper.h"
 #include "audio_capture/audio_capture.h"
 #include "asr/sherpa_asr.h"
+#include "tts/sherpa_tts.h"
+#include "tts/audio_player.h"
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
 #include "video_capture/video_capture.h"
@@ -75,6 +77,13 @@ public:
      * @param sleeping true=进入休眠，false=唤醒
      */
     void setSleeping(bool sleeping) { is_sleeping = sleeping; }
+
+    /**
+     * @brief TTS 语音合成并播放
+     * @param text 要合成的文本
+     * @param speed 语速，默认 1.0
+     */
+    void Speak(const std::string& text, float speed = 1.0f);
 
     /**
      * @brief 测试设置beam
@@ -277,8 +286,14 @@ private:
     // AIUI句柄，用于处理语音识别和合成
     AiuiWrapper aiui_wrapper_;
 
-    // sherpa-onnx 本地流式 ASR
+    // sherpa-onnx 本地离线 ASR (SenseVoice)
     SherpaAsr sherpa_asr_;
+
+    // sherpa-onnx 本地 TTS (Matcha)
+    SherpaTts sherpa_tts_;
+
+    // 音频播放器（支持打断）
+    AudioPlayer audio_player_;
 
 private:
     int scaling_factor_ = 2;    // 缩放因子

@@ -176,12 +176,38 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化 sherpa-onnx ASR 成功");
     }
 
-    // 4、初始化视频采集
+    // 4、初始化 Matcha TTS
+    LOG_INFO("初始化 Matcha TTS");
+    std::string tts_model_dir = project_dir + "/matcha-icefall-zh-baker";
+    std::string vocoder_path = tts_model_dir + "/hifigan_v2.onnx";
+    ret = sherpa_tts_.Init(tts_model_dir, vocoder_path);
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化 Matcha TTS 失败");
+    }
+    else
+    {
+        LOG_INFO("初始化 Matcha TTS 成功");
+    }
+
+    // 5、初始化音频播放器
+    LOG_INFO("初始化音频播放器");
+    ret = audio_player_.Init("default", sherpa_tts_.GetSampleRate());
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化音频播放器失败");
+    }
+    else
+    {
+        LOG_INFO("初始化音频播放器成功");
+    }
+
+    // 6、初始化视频采集
     // ret = video_cap_.Start(this, videoCaptureCallback);
     // CHECK_RET(ret);
 
     LOG_INFO("初始化音频采集");
-    // 5、初始化音频采集
+    // 7、初始化音频采集
     ret = audio_cap_.Start(this, audioCaptureCallback);
     CHECK_RET(ret);
     if (0 != ret)
@@ -223,9 +249,44 @@ int AvvtnCapture::Destory()
     // 4、销毁 sherpa-onnx ASR
     sherpa_asr_.Destroy();
 
-    // 5、销毁AIUI
+    // 5、销毁音频播放器
+    audio_player_.Destroy();
+
+    // 6、销毁 sherpa-onnx TTS
+    sherpa_tts_.Destroy();
+
+    // 7、销毁AIUI
     aiui_wrapper_.Destory();
     return 0;
+}
+
+// TTS 语音合成并播放
+void AvvtnCapture::Speak(const std::string& text, float speed)
+{
+    if (!sherpa_tts_.IsInitialized()) {
+        LOG_WARN("TTS 未初始化，无法合成语音");
+        return;
+    }
+
+    if (text.empty()) {
+        LOG_WARN("TTS 输入文本为空");
+        return;
+    }
+
+    LOG_INFO("TTS 播放: \"%s\"", text.c_str());
+
+    // 打断当前播放
+    audio_player_.Interrupt();
+
+    // 流式合成：边合成边播放
+    sherpa_tts_.Generate(text, [this](const AudioChunk& chunk, float progress) -> bool {
+        // 将音频块送入播放器
+        audio_player_.StreamPush(chunk.samples.data(), chunk.samples.size());
+        return true;  // 继续合成
+    }, speed);
+
+    // 通知播放结束
+    audio_player_.StreamEnd();
 }
 
 // 测试多模态降噪引擎

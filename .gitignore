@@ -67,3 +67,6 @@ __MACOSX/
 /sherpa-onnx-streaming-paraformer-bilingual-zh-en/
 /sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/
 /sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09/
+
+# TTS model directories (large files, not version controlled)
+/matcha-icefall-zh-baker/
