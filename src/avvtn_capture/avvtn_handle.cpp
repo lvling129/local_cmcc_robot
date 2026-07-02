@@ -266,9 +266,66 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                 ROSManager::getInstance().publishChatHistory(ask.dump());
                 ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
 
-                // TODO: 将 ASR 结果发送给大模型，获取回复后调用 Speak()
-                // 目前回显 ASR 结果用于测试 TTS
-                Speak(final_text);
+                // 第一步：意图识别（同步，快速返回）
+                std::string intent_json = llm_intent_.Chat(final_text);
+                LOG_INFO("意图识别原始响应: [%s]", intent_json.c_str());
+
+                // 解析意图
+                std::string intent = "chat";  // 默认闲聊
+                size_t intent_pos = intent_json.find("\"intent\"");
+                if (intent_pos != std::string::npos) {
+                    size_t colon_pos = intent_json.find(":", intent_pos);
+                    size_t quote_start = intent_json.find("\"", colon_pos + 1);
+                    size_t quote_end = intent_json.find("\"", quote_start + 1);
+                    if (quote_start != std::string::npos && quote_end != std::string::npos) {
+                        intent = intent_json.substr(quote_start + 1, quote_end - quote_start - 1);
+                    }
+                } else {
+                    LOG_WARN("意图识别未返回有效JSON，默认闲聊");
+                }
+                LOG_INFO("解析意图: %s", intent.c_str());
+
+                // 灵活匹配意图（小模型可能返回变体如 query_bill 而非 query_balance）
+                bool is_chat = (intent == "chat" ||
+                               intent.find("chat") != std::string::npos ||
+                               intent.find("闲聊") != std::string::npos);
+
+                if (is_chat) {
+                    // 闲聊：发送给对话模型，流式回复触发 TTS
+                    LOG_INFO("意图: 闲聊，调用对话模型");
+                    llm_chat_.ChatAsync(final_text,
+                        [this](const std::string& chunk, bool is_done) -> bool {
+                            if (!chunk.empty()) {
+                                Speak(chunk);
+                            }
+                            return true;
+                        },
+                        [this](const std::string& full_response) {
+                            LOG_INFO("LLM 回复: %s", full_response.c_str());
+                            nlohmann::json reply = {
+                                {"speaker", "robot"},
+                                {"text", full_response}
+                            };
+                            ROSManager::getInstance().publishChatHistory(reply.dump());
+                        }
+                    );
+                } else {
+                    // 业务指令：内部处理，不触发对话模型
+                    LOG_INFO("意图: %s，业务处理", intent.c_str());
+                    // TODO: 根据 intent 执行具体业务（查话费、查流量等）
+                    // 目前统一回复，后续接入具体业务逻辑
+                    if (intent.find("balance") != std::string::npos || intent.find("bill") != std::string::npos) {
+                        Speak("正在为您查询话费，请在屏幕上输入手机号。");
+                    } else if (intent.find("traffic") != std::string::npos) {
+                        Speak("正在为您查询流量，请在屏幕上输入手机号。");
+                    } else if (intent.find("package") != std::string::npos) {
+                        Speak("正在查询您的套餐信息。");
+                    } else if (intent.find("back") != std::string::npos || intent.find("home") != std::string::npos) {
+                        Speak("好的，已返回首页。");
+                    } else {
+                        Speak("好的，正在为您处理。");
+                    }
+                }
             }
             // 重置识别状态，准备下一句
             sherpa_asr_.Reset();

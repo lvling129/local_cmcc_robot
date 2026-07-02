@@ -16,6 +16,7 @@
 #include "asr/sherpa_asr.h"
 #include "tts/sherpa_tts.h"
 #include "tts/audio_player.h"
+#include "llm/llm_client.h"
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
 #include "video_capture/video_capture.h"
@@ -294,6 +295,10 @@ private:
 
     // 音频播放器（支持打断）
     AudioPlayer audio_player_;
+
+    // 本地大模型客户端
+    LlmClient llm_intent_;   // 意图识别模型 (qwen3-1.7b, port 8081)
+    LlmClient llm_chat_;     // 对话模型 (qwen3-8b, port 8080)
 
 private:
     int scaling_factor_ = 2;    // 缩放因子

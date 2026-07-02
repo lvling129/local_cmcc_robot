@@ -22,6 +22,13 @@ prepare_env() {
 
     # 与 service 配置保持一致，显式设置 ROS_DOMAIN_ID
     export ROS_DOMAIN_ID=0
+
+    # 动态判断：无网卡可用时回退到 localhost 模式
+    if ip -o link show up 2>/dev/null | grep -qv 'lo\|docker\|veth\|br-'; then
+        : # 有可用网卡，不限制
+    else
+        export ROS_LOCALHOST_ONLY=1
+    fi
 }
 
 stop_existing_instance() {

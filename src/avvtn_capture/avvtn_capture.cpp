@@ -2,6 +2,21 @@
 #include "utils/Logger.hpp"
 #include "ros2/ros_manager.hpp"
 
+#include <fstream>
+#include <sstream>
+
+// 读取 prompt 文件
+static std::string ReadPromptFile(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        LOG_ERROR("无法打开 prompt 文件: %s", path.c_str());
+        return "";
+    }
+    std::stringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+}
+
 AvvtnCapture* AvvtnCapture::g_avvtn_capture_instance = nullptr;
 
 // 初始化类静态成员（必须在类外初始化）
@@ -202,6 +217,45 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化音频播放器成功");
     }
 
+    // 5.1、初始化 LLM 客户端
+    LOG_INFO("初始化 LLM 客户端");
+
+    const std::string prompt_dir = "/home/nvidia/local_cmcc_robot/resource/prompts";
+
+    // 意图识别模型 (qwen3-1.7b)
+    ret = llm_intent_.Init("http://127.0.0.1:8081");
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化意图识别 LLM 失败");
+    }
+    else
+    {
+        std::string intent_prompt = ReadPromptFile(prompt_dir + "/intent.prompt");
+        if (!intent_prompt.empty()) {
+            llm_intent_.SetSystemPrompt(intent_prompt);
+            LOG_INFO("加载意图识别 prompt: %s/intent.prompt", prompt_dir.c_str());
+        }
+        llm_intent_.SetParams(0.1f, 64);  // 低温度、短回复
+        LOG_INFO("初始化意图识别 LLM 成功 (port 8081)");
+    }
+
+    // 对话模型 (qwen3-8b)
+    ret = llm_chat_.Init("http://127.0.0.1:8080");
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化对话 LLM 失败");
+    }
+    else
+    {
+        std::string chat_prompt = ReadPromptFile(prompt_dir + "/chat.prompt");
+        if (!chat_prompt.empty()) {
+            llm_chat_.SetSystemPrompt(chat_prompt);
+            LOG_INFO("加载对话 prompt: %s/chat.prompt", prompt_dir.c_str());
+        }
+        llm_chat_.SetParams(0.7f, 512);
+        LOG_INFO("初始化对话 LLM 成功 (port 8080)");
+    }
+
     // 6、初始化视频采集
     // ret = video_cap_.Start(this, videoCaptureCallback);
     // CHECK_RET(ret);
@@ -270,6 +324,21 @@ void AvvtnCapture::Speak(const std::string& text, float speed)
 
     if (text.empty()) {
         LOG_WARN("TTS 输入文本为空");
+        return;
+    }
+
+    // 检查是否包含中文字符（UTF-8 中文范围 0xE4-0xE9 开头）
+    bool has_chinese = false;
+    for (size_t i = 0; i < text.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c >= 0xE4 && c <= 0xE9) {
+            has_chinese = true;
+            break;
+        }
+    }
+
+    if (!has_chinese) {
+        LOG_WARN("TTS 跳过非中文文本: \"%s\"", text.c_str());
         return;
     }
 

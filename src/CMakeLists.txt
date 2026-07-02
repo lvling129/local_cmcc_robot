@@ -37,6 +37,7 @@ target_link_libraries(${PROJECT_NAME}
   udev
   portaudio
   asound
+  curl
   avvtn_mic${MIC_NUM}
   aiui
   sherpa-onnx-c-api
