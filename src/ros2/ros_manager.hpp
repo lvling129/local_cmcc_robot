@@ -20,9 +20,6 @@ public:
     // 获取节点
     std::shared_ptr<rclcpp::Node> getNode();
 
-    // 发布带角度的唤醒消息给PC2做转向动作
-    void publishWakeupDetail(const std::string& chat_msg);
-
     // 发布语音唤醒事件（topic: /voice_wakeup）
     void publishVoiceWakeup(const std::string& msg);
 
@@ -52,7 +49,6 @@ private:
                         const std::string& msg);
 
     std::shared_ptr<rclcpp::Node> node_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr wakeup_detail_publisher_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr voice_wakeup_publisher_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr voice_topic_publisher_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr chat_conversation_publisher_;

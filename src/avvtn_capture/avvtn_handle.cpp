@@ -455,7 +455,6 @@ void AvvtnCapture::handleAudioWake(avvtn_callback_data_t *data_p)
         return;
     }
 
-    //aiui_wrapper_.ResetWakeup();
     is_sleeping = false;
 
     // 发布唤醒事件到 /voice_wakeup 话题
@@ -483,7 +482,6 @@ void AvvtnCapture::handleTouchWake()
 
     // system("ffplay -autoexit -nodisp -ar 24000 -ac 1 -f f32le /home/nvidia/local_cmcc_robot/bin/output.pcm > /dev/null 2>&1 &");
 
-    //aiui_wrapper_.Wakeup();
     LOG_INFO("触摸唤醒已执行");
 }
 

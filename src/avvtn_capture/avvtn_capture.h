@@ -11,7 +11,6 @@
 #include <iostream>
 #include <string>
 
-#include "aiui_capture/aiui_wapper.h"
 #include "audio_capture/audio_capture.h"
 #include "asr/sherpa_asr.h"
 #include "tts/sherpa_tts.h"
@@ -45,23 +44,15 @@ public:
     /**
      * @brief 初始化多模态采集系统
      * @param avvtn_cfg_path 多模态降噪引擎配置文件路径
-     * @param aiui_cfg_path AIUI配置文件路径
      * @return 0表示成功，非0表示失败
      */
-    int Init(std::string avvtn_cfg_path, std::string aiui_cfg_path);
+    int Init(std::string avvtn_cfg_path);
 
     /**
      * @brief 销毁多模态采集系统，释放资源
      * @return 0表示成功，非0表示失败
      */
     int Destory();
-
-    static void onStarted();
-    static void onPaused();
-    static void onResumed();
-    static void onStopped();
-    static void onError(int error, const char *des);
-    static void onProgress(int streamId, int progress, const char *audio, int len, bool isCompleted);
 
     // 在类中添加静态获取函数
     static AvvtnCapture* getInstance() {
@@ -102,20 +93,6 @@ public:
 
 private:
     static AvvtnCapture* g_avvtn_capture_instance;
-
-    // 定时器私有静态成员（仅类内部访问，线程安全）
-    static std::atomic<bool> g_timer_running;
-    static std::atomic<long long> g_last_active_time;
-    static std::thread g_timer_thread;
-
-    // 定时器核心循环（私有静态函数）
-    static void timerLoop();
-    // 获取当前毫秒时间戳（私有内联函数）
-    static inline long long getCurrentTimeMs();
-
-    static void onPlayerTimeout();  // 定时器超时目标函数
-    static void stopPlayerTimer();  // 统一停止定时器函数
-
 private:
     /**
      * @brief 视频采集回调函数（静态函数）
@@ -142,12 +119,6 @@ private:
      */
     static int avvtnCallback(avvtn_callback_data_t *data_p, void *user_data);
 
-    /**
-     * @brief AIUI回调函数（静态函数）
-     * @param user_data 用户数据指针，指向AvvtnCapture实例
-     * @param event AIUI事件
-     */
-    static void aiuiCallback(void *user_data, const IAIUIEvent &event);
     /**
      * @brief 解析json数据并检查数据
      * @param data_p 回调数据指针
@@ -180,61 +151,6 @@ private:
      * @param data_p 回调数据指针
      */
     void handleAudioWake(avvtn_callback_data_t *data_p);
-
-    /**
-     * @brief 处理AIUI识别回调
-     * @param buffer 识别结果
-     */
-    void handleAiuiIat(Json::Reader &reader, const char *buffer, int len);
-
-    /**
-     * @brief 处理AIUI合成回调
-     * @param buffer 合成结果
-     */
-    void handleAiuiTts(const Json::Reader &reader, const Json::Value content, const IAIUIEvent event, Json::Value bizParamJson, const char *buffer, int len);
-
-    /**
-     * @brief 处理AIUI流式nlp回调
-     * @param buffer 流式nlp结果
-     */
-    void handleAiuiStreamNlp(Json::Reader &reader, const char *buffer, int len);
-
-    /**
-     * @brief 处理 AIUI 返回的语义规整结果 (cbm_tidy)
-     * @param resultStr JSON 字符串格式的语义规整结果
-     */
-    void handleCbmTidy(const std::string& resultStr);
-
-    /**
-     * @brief 处理 AIUI 返回的传统语义技能结果 (cbm_semantic)
-     * @param resultStr JSON 字符串格式的传统语义技能结果
-     * @return bool 是否命中技能 (true: 命中技能, false: 未命中技能或解析失败)
-     */
-    bool handleCbmSemantic(const std::string& resultStr);
-
-    /**
-     * @brief 处理 AIUI 返回的意图落域结果 (cbm_tool_pk)，无返回值版本
-     * @param resultStr JSON 字符串格式的意图落域结果
-     */
-    void handleCbmToolPk(const std::string& resultStr);
-
-    /**
-     * @brief 处理 AIUI 返回的知识分类结果 (cbm_retrieval_classify)
-     * @param resultStr JSON 字符串格式的知识分类结果
-     */
-    void handleCbmRetrievalClassify(const std::string& resultStr);
-
-    /**
-     * @brief 处理 AIUI 返回的知识溯源结果 (cbm_knowledge)
-     * @param resultStr JSON 字符串格式的知识溯源结果
-     */
-    void handleCbmKnowledge(const std::string& resultStr);
-
-    /**
-     * @brief 处理 命中的技能
-     * @param text_str JSON 字符串格式的技能text
-     */
-    void handleSkill(const std::string& text_str);
 
     /**
      * @brief 测试评估关键词
@@ -291,9 +207,6 @@ private:
     // 多模态降噪引擎句柄，用于处理音视频数据
     avvtn_handle avvtn_cap_ = nullptr;
 
-    // AIUI句柄，用于处理语音识别和合成
-    AiuiWrapper aiui_wrapper_;
-
     // sherpa-onnx 本地离线 ASR (SenseVoice)
     SherpaAsr sherpa_asr_;
 
@@ -313,19 +226,6 @@ private:
     cv::Mat resized_image_;     // 缩放后的图像
 
     std::string wake_mode_ = "ivw";           // 唤醒模式
-    std::string current_tts_sid_;             // 当前合成sid
-    std::string current_iat_sid_;             // 当前识别sid
-    std::string iat_text_buffer_;             // 识别结果缓存
-    std::string stream_nlp_answer_buffer_;    // 流式nlp的应答语缓存
-    int tts_len_          = 0;                // 当前收到了tts音频的长度
-    int intent_cnt_       = 0;                // 意图的数量
-    int stream_nlp_index_ = 0;                // 流式nlp的索引
-
-    std::string ignore_tts_sid_;              // 当前tts不播放，播放技能返回tts
-
-    bool is_skill = false;      //是否命中技能
-    bool is_knowledge = false;  //是否命中知识库
-    bool is_playing;            //播放器是否正在播放
     bool is_sleeping = true;           //是否已经休眠，等待唤醒
 };
 

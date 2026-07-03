@@ -20,112 +20,8 @@ static std::string ReadPromptFile(const std::string& path) {
 
 AvvtnCapture* AvvtnCapture::g_avvtn_capture_instance = nullptr;
 
-// 初始化类静态成员（必须在类外初始化）
-std::atomic<bool> AvvtnCapture::g_timer_running(false);
-std::atomic<long long> AvvtnCapture::g_last_active_time(0LL); // 0LL表示long long类型的0
-std::thread AvvtnCapture::g_timer_thread;
-
-// 实现时间戳函数
-inline long long AvvtnCapture::getCurrentTimeMs() {
-    auto now = std::chrono::system_clock::now();
-    auto duration = now.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-}
-
-// 实现超时目标函数
-void AvvtnCapture::onPlayerTimeout() {
-    LOG_DEBUG("播放器1秒无进度更新，触发超时回调！");
-
-    AvvtnCapture* instance = g_avvtn_capture_instance;
-    if (instance == nullptr) {
-        LOG_WARN("onPlayerTimeout: 实例已销毁，跳过处理");
-        stopPlayerTimer();
-        return;
-    }
-
-    instance->is_playing = false;
-
-    stopPlayerTimer();
-}
-
-// 实现定时器循环
-void AvvtnCapture::timerLoop() {
-    const int TIMEOUT_MS = 1000;
-    while (g_timer_running) {
-        long long current = getCurrentTimeMs();
-        long long last = g_last_active_time.load();
-        if (last != 0 && (current - last) >= TIMEOUT_MS) {
-            onPlayerTimeout();
-            g_last_active_time = 0;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-}
-
-/*********************播放回调函数************************/
-void AvvtnCapture::onStarted()
-{
-    std::cout << "PcmPlayer, onStarted" << std::endl;
-}
-
-void AvvtnCapture::onPaused()
-{
-    std::cout << "PcmPlayer, onPaused" << std::endl;
-}
-
-void AvvtnCapture::onResumed()
-{
-    std::cout << "PcmPlayer, onResumed" << std::endl;
-}
-
-void AvvtnCapture::onStopped()
-{
-    std::cout << "PcmPlayer, onStopped" << std::endl;
-}
-
-void AvvtnCapture::onError(int error, const char *des)
-{
-    std::cout << "PcmPlayer, onError, error=" << error << ", des=" << des << std::endl;
-}
-
-void AvvtnCapture::onProgress(int streamId, int progress, const char *audio, int len, bool isCompleted)
-{
-    //std::cout << "PcmPlayer, onProgress, streamId=" << streamId << ", progress=" << progress << ", len=" << len << ", isCompleted=" << isCompleted << std::endl;
-    AvvtnCapture* instance = g_avvtn_capture_instance;
-    if (instance == nullptr) {
-        LOG_WARN("onProgress: 实例已销毁，跳过处理");
-        return;
-    }
-
-    instance->is_playing = true;
-
-    // 重置定时器：更新最后活动时间戳
-    g_last_active_time = getCurrentTimeMs();
-    // 首次触发时启动定时器线程
-    if (!g_timer_running) {
-        g_timer_running = true;
-        g_timer_thread = std::thread(timerLoop);
-        g_timer_thread.detach();
-    }
-
-    // 原有业务逻辑
-    if (isCompleted) {
-        LOG_DEBUG("音频播放完成！streamId=%d\n", streamId);
-    }
-
-    if (progress == 100) {
-        LOG_DEBUG("播放进度已达到100%%\n");
-    }
-}
-
-// 实现停止定时器函数
-void AvvtnCapture::stopPlayerTimer() {
-    g_timer_running = false;
-    g_last_active_time = 0;
-}
-
 // 初始化
-int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
+int AvvtnCapture::Init(std::string avvtn_cfg_path)
 {
     int ret = 0;
     LOG_INFO("初始化多模态降噪引擎AVVTN");
@@ -148,28 +44,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化多模态降噪引擎AVVTN成功");
     }
 
-    LOG_INFO("初始化AIUI");
-    // 2、初始化 aiui(可选，如果接入自己的大模型和识别引擎则将这块剥离)
-    aiui_init_param_t aiui_init_param;
-    aiui_init_param.param.cfg_path     = aiui_cfg_path;
-    aiui_init_param.callback.handler   = aiuiCallback;
-    aiui_init_param.callback.user_data = this;
-    ret                                = aiui_wrapper_.Init(aiui_init_param);
-    CHECK_RET(ret);
-    LOG_DEBUG("读取AIUI配置文件: %s", aiui_cfg_path.c_str());
-    if (0 != ret)
-    {
-        LOG_ERROR("初始化AIUI失败");
-    }
-    else
-    {
-        LOG_INFO("初始化AIUI成功");
-    }
-
-    // 初始化pcm播放器回调
-    aiui_pcm_player_set_callbacks(onStarted, onPaused, onResumed, onStopped, onProgress, onError);
-
-    // 3、初始化 SenseVoice 本地 ASR
+    // 2、初始化 SenseVoice 本地 ASR
     LOG_INFO("初始化 SenseVoice 本地 ASR");
     std::string project_dir = avvtn_cfg_path.substr(0, avvtn_cfg_path.find_last_of('/'));
     std::string asr_model_dir = project_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
@@ -183,7 +58,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化 sherpa-onnx ASR 成功");
     }
 
-    // 4、初始化 Matcha TTS
+    // 3、初始化 Matcha TTS
     LOG_INFO("初始化 Matcha TTS");
     std::string tts_model_dir = project_dir + "/matcha-icefall-zh-baker";
     std::string vocoder_path = tts_model_dir + "/hifigan_v2.onnx";
@@ -197,7 +72,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化 Matcha TTS 成功");
     }
 
-    // 5、初始化音频播放器
+    // 4、初始化音频播放器
     LOG_INFO("初始化音频播放器");
     ret = audio_player_.Init("default", sherpa_tts_.GetSampleRate());
     if (ret != 0)
@@ -209,7 +84,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化音频播放器成功");
     }
 
-    // 5.1、初始化 LLM 客户端
+    // 4.1、初始化 LLM 客户端
     LOG_INFO("初始化 LLM 客户端");
 
     const std::string prompt_dir = "/home/nvidia/local_cmcc_robot/resource/prompts";
@@ -248,12 +123,12 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
         LOG_INFO("初始化对话 LLM 成功 (port 8080)");
     }
 
-    // 6、初始化视频采集
+    // 5、初始化视频采集
     // ret = video_cap_.Start(this, videoCaptureCallback);
     // CHECK_RET(ret);
 
     LOG_INFO("初始化音频采集");
-    // 7、初始化音频采集
+    // 6、初始化音频采集
     ret = audio_cap_.Start(this, audioCaptureCallback);
     CHECK_RET(ret);
     if (0 != ret)
@@ -278,10 +153,7 @@ int AvvtnCapture::Destory()
     // ret = video_cap_.Stop();
     // CHECK_RET(ret);
 
-    // 先停止定时器，确保回调不再访问成员变量
-    stopPlayerTimer();
-
-    // 再清空全局实例指针，后续回调会因空指针检查而跳过
+    // 清空全局实例指针，后续回调会因空指针检查而跳过
     g_avvtn_capture_instance = nullptr;
 
     // 2、停止音频采集
@@ -300,8 +172,6 @@ int AvvtnCapture::Destory()
     // 6、销毁 sherpa-onnx TTS
     sherpa_tts_.Destroy();
 
-    // 7、销毁AIUI
-    aiui_wrapper_.Destory();
     return 0;
 }
 

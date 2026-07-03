@@ -39,7 +39,6 @@ target_link_libraries(${PROJECT_NAME}
   asound
   curl
   avvtn_mic${MIC_NUM}
-  aiui
   sherpa-onnx-c-api
   sherpa-onnx-cxx-api
   sherpa-onnx-core
