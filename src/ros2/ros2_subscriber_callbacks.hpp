@@ -12,13 +12,6 @@
  */
 
 /**
- * @brief 唤醒结果话题回调
- * @param msg 话题消息
- * @note 话题名: wake_up_turn_result
- */
-void WakeUpResultCallback(const std_msgs::msg::String::SharedPtr msg);
-
-/**
  * @brief 触摸唤醒话题回调
  * @param msg 话题消息
  * @note 话题名: /touch_wakeup

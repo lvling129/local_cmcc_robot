@@ -77,7 +77,6 @@ int main(int argc, char const *argv[])
     ROSManager::getInstance().init(argc, argv);
 
     // 3. 在这里订阅ROS2话题
-    ROSManager::getInstance().subscribeTopic("wake_up_turn_result", WakeUpResultCallback);
     ROSManager::getInstance().subscribeTopic("touch_wake_topic", TouchWakeupCallback);
     ROSManager::getInstance().subscribeTopic("/avvtn_sleep", AvvtnSleepCallback);
 
