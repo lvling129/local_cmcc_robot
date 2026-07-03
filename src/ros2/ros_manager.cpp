@@ -16,10 +16,6 @@ void ROSManager::init(int argc, char const *argv[]) {
         node_ = std::make_shared<rclcpp::Node>("robot_avvtn_node");
 
         // 创建发布器（此时尚未设置 initialized_，无需加锁）
-        log_publisher_ = node_->create_publisher<std_msgs::msg::String>("robot_avvtn_log", 10);
-        chat_history_publisher_ = node_->create_publisher<std_msgs::msg::String>("robot_avvtn_chat_history", 10);
-        status_publisher_ = node_->create_publisher<std_msgs::msg::String>("robot_avvtn_status", 10);
-        chat_history_nostream_publisher_ = node_->create_publisher<std_msgs::msg::String>("robot_avvtn_chat_history_nostream", 10);
         wakeup_detail_publisher_ = node_->create_publisher<std_msgs::msg::String>("avvtn_wake", 10);
 
         // 语音唤醒发布器（无人服务厅）
@@ -62,28 +58,6 @@ void ROSManager::publishMessage(const rclcpp::Publisher<std_msgs::msg::String>::
     auto message = std_msgs::msg::String();
     message.data = msg;
     publisher->publish(message);
-}
-
-void ROSManager::publishLog(const std::string& log_msg) {
-    publishMessage(log_publisher_, log_msg);
-}
-
-void ROSManager::publishChatHistory(const std::string& chat_msg) {
-    publishMessage(chat_history_publisher_, chat_msg);
-}
-
-/*
-    STATUS_WAITING_CONNECTION
-    STATUS_WAITING_WAKEUP
-    STATUS_IN_CONVERSATION
-    STATUS_WAITING_CONVERSATION
-*/
-void ROSManager::publishStatus(const std::string& status_msg) {
-    publishMessage(status_publisher_, status_msg);
-}
-
-void ROSManager::publishChatHistoryNoStream(const std::string& status_msg) {
-    publishMessage(chat_history_nostream_publisher_, status_msg);
 }
 
 void ROSManager::publishWakeupDetail(const std::string& status_msg) {

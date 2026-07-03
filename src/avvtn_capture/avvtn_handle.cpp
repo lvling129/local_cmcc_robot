@@ -274,14 +274,6 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                 };
                 ROSManager::getInstance().publishChatConversation(chat_asr.dump());
 
-                // 发布到 ROS2 话题
-                nlohmann::json ask = {
-                    {"speaker", "person"},
-                    {"text", final_text}
-                };
-                ROSManager::getInstance().publishChatHistory(ask.dump());
-                ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
-
                 // 第一步：意图识别（同步，快速返回）
                 std::string intent_json = llm_intent_.Chat(final_text);
                 LOG_INFO("意图识别原始响应: [%s]", intent_json.c_str());

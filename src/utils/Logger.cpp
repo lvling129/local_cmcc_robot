@@ -64,9 +64,6 @@ void Logger::Log(LogLevel level, const std::string& message,
                  const std::string& file, int line) {
     if (static_cast<int>(level) < static_cast<int>(level_)) return;
 
-    /*通过ROS话题robot_avvtn_log发布出去*/
-    ROSManager::getInstance().publishLog(message);
-
     LogEntry entry(level, message, file, line);
     std::string formatted;
 

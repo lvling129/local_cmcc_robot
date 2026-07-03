@@ -43,15 +43,6 @@ void AvvtnCapture::onPlayerTimeout() {
         return;
     }
 
-    if (instance->is_sleeping == true)
-    {
-        ROSManager::getInstance().publishStatus("STATUS_WAITING_WAKEUP");
-    }
-    else
-    {
-        ROSManager::getInstance().publishStatus("STATUS_WAITING_CONVERSATION");
-    }
-
     instance->is_playing = false;
 
     stopPlayerTimer();
@@ -273,7 +264,6 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
     {
         LOG_INFO("初始化音频采集成功");
         LOG_INFO("开始音频采集...");
-        ROSManager::getInstance().publishStatus("STATUS_WAITING_WAKEUP");
     }
 
     // test_avvtn();
@@ -403,6 +393,13 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
         [this, sentence_buffer, is_first_synthesis](const std::string& full_response) {
             LOG_INFO("LLM 回复: %s", full_response.c_str());
 
+            // LLM 回复为空时不发布到 /chat_history
+            if (full_response.empty()) {
+                LOG_WARN("LLM 回复为空，跳过发布");
+                audio_player_.StreamEnd();
+                return;
+            }
+
             // 发布 LLM 回复到 /chat_history 话题
             nlohmann::json chat_llm = {
                 {"speaker", "ROBOT"},
@@ -418,11 +415,6 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
             }
             // 流式播放结束
             audio_player_.StreamEnd();
-            nlohmann::json reply = {
-                {"speaker", "robot"},
-                {"text", full_response}
-            };
-            ROSManager::getInstance().publishChatHistory(reply.dump());
         }
     );
 }

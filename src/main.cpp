@@ -81,10 +81,7 @@ int main(int argc, char const *argv[])
     ROSManager::getInstance().subscribeTopic("touch_wake_topic", TouchWakeupCallback);
     ROSManager::getInstance().subscribeTopic("/avvtn_sleep", AvvtnSleepCallback);
 
-    // 4. 设置等待接入状态
-    ROSManager::getInstance().publishStatus("STATUS_WAITING_CONNECTION");
-
-    // 5. 初始化AvvtnCapture
+    // 4. 初始化AvvtnCapture
     AvvtnCapture capture;
 
     int ret = capture.Init("/home/nvidia/local_cmcc_robot/avvtn.cfg", "/home/nvidia/local_cmcc_robot/resource/aiui/aiui.cfg");
@@ -103,9 +100,8 @@ int main(int argc, char const *argv[])
     std::unique_lock<std::mutex> lk(mutex_);
     cv_.wait(lk);
 
-    // 7. 清理
+    // 6. 清理
     capture.Destory();
-    ROSManager::getInstance().publishStatus("STATUS_WAITING_CONNECTION");
     ROSManager::getInstance().shutdown();
     LOG_INFO("结束程序");
     return 0;

@@ -35,7 +35,6 @@ void AvvtnCapture::aiuiCallback(void *user_data, const IAIUIEvent &event)
             // 唤醒事件
             case AIUIConstant::EVENT_WAKEUP:
             {
-                ROSManager::getInstance().publishStatus("STATUS_WAITING_CONVERSATION");
                 LOG_INFO("接收到AIUI唤醒事件EVENT_WAKEUP: %s", event.getInfo());
                 LOG_INFO("pcm播放器停止播放");
                 std::cout << "EVENT_WAKEUP: " << event.getInfo() << std::endl;
@@ -51,10 +50,6 @@ void AvvtnCapture::aiuiCallback(void *user_data, const IAIUIEvent &event)
             case AIUIConstant::EVENT_SLEEP:
             {
                 self->is_sleeping = true;
-                if (self->is_playing == false)
-                {
-                    ROSManager::getInstance().publishStatus("STATUS_WAITING_WAKEUP");
-                }
                 LOG_INFO("接收到AIUI休眠事件EVENT_SLEEP: arg1 = %d", event.getArg1());
                 std::cout << "EVENT_SLEEP: arg1=" << event.getArg1() << std::endl;
             }
@@ -163,7 +158,6 @@ void AvvtnCapture::aiuiCallback(void *user_data, const IAIUIEvent &event)
                         LOG_INFO("ignore current tts");
                         break;
                     }
-                    ROSManager::getInstance().publishStatus("STATUS_IN_CONVERSATION");
                     self->handleAiuiTts(reader, content, event, bizParamJson, buffer, dataLen);
                 }
                 else if (sub == "nlp")
@@ -328,14 +322,6 @@ void AvvtnCapture::handleAiuiIat(Json::Reader &reader, const char *buffer, int l
         bool isLast = textJson["ls"].asBool();
         if (isLast)
         {
-            /*发送ROS2话题robot_avvtn_chat_history  问*/
-            nlohmann::json ask = {
-                    {"speaker", "person"},
-                    {"text", iat_text_buffer_}
-            };
-            ROSManager::getInstance().publishChatHistory(ask.dump());
-            ROSManager::getInstance().publishChatHistoryNoStream(ask.dump());
-
             LOG_INFO("IAT语音识别结果: %s", iat_text_buffer_.c_str());
             std::cout << "iat: " << iat_text_buffer_ << std::endl;
             iat_text_buffer_.clear();
@@ -467,36 +453,11 @@ void AvvtnCapture::handleAiuiStreamNlp(Json::Reader &reader, const char *buffer,
 
             LOG_INFO("大模型返回nlp语义结果: seq = %d, status = %d, answer（应答语）: %s", seq, status, text.c_str());
             std::cout << "seq=" << seq << ", status=" << status << ", answer（应答语）: " << text << std::endl;
-            // 技能返回语音文本时不显示大模型回复的文本
-            if (ignore_tts_sid_ != current_iat_sid_)
-            {
-                nlohmann::json nlp_answer = {
-                        {"seq", std::to_string(seq)},
-                        {"status", std::to_string(status)},
-                        {"speaker", "robot"},
-                        {"text", text}
-                };
-                ROSManager::getInstance().publishChatHistory(nlp_answer.dump());
-            }
 
             if (status == 2)
             {
                 stream_nlp_answer_buffer_ += text;
                 LOG_INFO("大模型nlp流式返回fullText = %s", stream_nlp_answer_buffer_.c_str());
-
-                // 技能返回语音文本时不显示大模型回复的文本
-                if (ignore_tts_sid_ != current_iat_sid_)
-                {
-                    /*发送ROS2话题robot_avvtn_chat_history  答*/
-                    nlohmann::json answer = {
-                            {"speaker", "robot"},
-                            {"text", stream_nlp_answer_buffer_},
-                            {"is_skill", std::to_string(is_skill)},
-                            {"is_knowledge", std::to_string(is_knowledge)}
-                    };
-                    ROSManager::getInstance().publishChatHistoryNoStream(answer.dump());
-                }
-
                 stream_nlp_answer_buffer_.clear();
             }
         }

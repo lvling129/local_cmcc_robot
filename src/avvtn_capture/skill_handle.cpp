@@ -208,22 +208,6 @@ void AvvtnCapture::handleSkill(const std::string& text_str)
             ignore_tts_sid_ = current_iat_sid_;
             // 调用语音合成TTS，播放技能返回的语音文本
             aiui_wrapper_.StartTTS(voice_answer_content);
-            // 技能答复的文本发送ROS话题
-            nlohmann::json nlp_answer = {
-                    {"seq", std::to_string(0)},
-                    {"status", std::to_string(2)},
-                    {"speaker", "robot"},
-                    {"text", voice_answer_content}
-            };
-            ROSManager::getInstance().publishChatHistory(nlp_answer.dump());
-
-            nlohmann::json nlp_answer_nostream = {
-                    {"speaker", "robot"},
-                    {"text", voice_answer_content},
-                    {"is_skill", std::to_string(is_skill)},
-                    {"is_knowledge", std::to_string(is_knowledge)}
-            };
-            ROSManager::getInstance().publishChatHistoryNoStream(nlp_answer_nostream.dump());
         }
 
         // 检查type字段是否存在
