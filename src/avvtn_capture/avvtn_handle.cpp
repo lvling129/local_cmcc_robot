@@ -3,7 +3,6 @@
 #include "utils/json.hpp"
 #include "ros2/ros_manager.hpp"
 #include <cstdlib>
-#include <chrono>
 
 int AvvtnCapture::test_evaluate_keyword(const char *keyword)
 {
@@ -230,21 +229,6 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
         LOG_DEBUG("识别音频回调: vad_status = %d", vad_status);
     }
     cJSON_Delete(json);
-
-    // 打印音频回调间隔和数据量（用于确认发送周期）
-    // 调试用，后续删除，包含#include <chrono>
-/*
-    {
-        static auto last_time = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        auto interval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count();
-        last_time = now;
-        // 16kHz mono S16LE: 1ms = 32字节
-        int audio_duration_ms = data_p->data_size / 32;
-        LOG_INFO("REC音频回调: data_size=%d, 音频时长=%dms, channel=%d, vad_status=%d, 回调间隔=%lldms",
-                 data_p->data_size, audio_duration_ms, channel, vad_status, interval_ms);
-    }
-*/
 
     if (!is_sleeping && sherpa_asr_.IsInitialized()) {
         if (vad_status == 3)
