@@ -83,8 +83,15 @@ public:
      * @brief TTS 语音合成并播放
      * @param text 要合成的文本
      * @param speed 语速，默认 1.0
+     * @param append_mode 追加模式，true=不打断当前播放（流式追加用）
      */
-    void Speak(const std::string& text, float speed = 1.0f);
+    void Speak(const std::string& text, float speed = 1.0f, bool append_mode = false);
+
+    /**
+     * @brief 发送文本给 LLM 闲聊模型，流式回复触发 TTS 播放
+     * @param text 要发送给 LLM 的文本
+     */
+    void ChatAndSpeak(const std::string& text);
 
     /**
      * @brief 测试设置beam

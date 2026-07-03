@@ -33,6 +33,14 @@ void TouchWakeupCallback(const std_msgs::msg::String::SharedPtr msg);
  */
 void AvvtnSleepCallback(const std_msgs::msg::String::SharedPtr msg);
 
+/**
+ * @brief 豆包TTS文本回调
+ * @param msg 话题消息（纯文本）
+ * @note 话题名: /doubao_tts
+ *       收到文本后调用 TTS 合成并播放
+ */
+void DoubaoTtsCallback(const std_msgs::msg::String::SharedPtr msg);
+
 // 在此处添加更多订阅回调的声明，例如：
 // void onCommand(const std_msgs::msg::String::SharedPtr msg);
 // void onConfigUpdate(const std_msgs::msg::String::SharedPtr msg);

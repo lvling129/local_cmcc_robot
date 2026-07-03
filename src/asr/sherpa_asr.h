@@ -62,6 +62,12 @@ public:
     std::string GetResult();
 
     /**
+     * @brief 获取上次识别的语言
+     * @return 语言代码（zh/en/ja/ko/cantonese）
+     */
+    std::string GetLang() const { return last_lang_; }
+
+    /**
      * @brief 重置识别状态（一句话结束后调用，开始下一句）
      */
     void Reset();
@@ -82,6 +88,7 @@ private:
     const SherpaOnnxOfflineStream* stream_ = nullptr;
     std::vector<float> float_buffer_;      // S16LE → float 转换缓冲
     std::vector<int16_t> utterance_buffer_; // 累积整句 S16LE 音频
+    std::string last_lang_;                 // 上次识别的语言
 };
 
 #endif // SHERPA_ASR_H

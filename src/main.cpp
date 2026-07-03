@@ -96,6 +96,9 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
+    // 5.1 订阅豆包TTS话题（需在 AvvtnCapture 初始化后）
+    ROSManager::getInstance().subscribeTopic("/doubao_tts", DoubaoTtsCallback);
+
     // 6. 等待信号
     std::unique_lock<std::mutex> lk(mutex_);
     cv_.wait(lk);

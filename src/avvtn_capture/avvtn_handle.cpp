@@ -258,6 +258,22 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
             if (!final_text.empty()) {
                 LOG_INFO("SenseVoice 识别结果: %s", final_text.c_str());
 
+                // 只处理中文 ASR 结果，其他语言跳过所有后续流程
+                std::string lang = sherpa_asr_.GetLang();
+                if (lang.find("zh") == std::string::npos) {
+                    LOG_INFO("非中文识别结果(lang=%s)，跳过", lang.c_str());
+                    sherpa_asr_.Reset();
+                    LOG_INFO("VAD结束，重置 SenseVoice 识别状态");
+                    return;
+                }
+
+                // 发布到 /chat_history 话题
+                nlohmann::json chat_asr = {
+                    {"speaker", "PERSON"},
+                    {"content", final_text}
+                };
+                ROSManager::getInstance().publishChatConversation(chat_asr.dump());
+
                 // 发布到 ROS2 话题
                 nlohmann::json ask = {
                     {"speaker", "person"},
@@ -291,40 +307,37 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                                intent.find("闲聊") != std::string::npos);
 
                 if (is_chat) {
-                    // 闲聊：发送给对话模型，流式回复触发 TTS
+                    // 闲聊：发送给对话模型，流式回复触发 TTS（句子级缓冲）
                     LOG_INFO("意图: 闲聊，调用对话模型");
-                    llm_chat_.ChatAsync(final_text,
-                        [this](const std::string& chunk, bool is_done) -> bool {
-                            if (!chunk.empty()) {
-                                Speak(chunk);
-                            }
-                            return true;
-                        },
-                        [this](const std::string& full_response) {
-                            LOG_INFO("LLM 回复: %s", full_response.c_str());
-                            nlohmann::json reply = {
-                                {"speaker", "robot"},
-                                {"text", full_response}
-                            };
-                            ROSManager::getInstance().publishChatHistory(reply.dump());
-                        }
-                    );
+                    ChatAndSpeak(final_text);
                 } else {
                     // 业务指令：内部处理，不触发对话模型
                     LOG_INFO("意图: %s，业务处理", intent.c_str());
-                    // TODO: 根据 intent 执行具体业务（查话费、查流量等）
-                    // 目前统一回复，后续接入具体业务逻辑
+
+                    // 确定业务类型并发布到 /voice_topic
+                    std::string business_type;
                     if (intent.find("balance") != std::string::npos || intent.find("bill") != std::string::npos) {
-                        Speak("正在为您查询话费，请在屏幕上输入手机号。");
+                        business_type = "query_balance";
                     } else if (intent.find("traffic") != std::string::npos) {
-                        Speak("正在为您查询流量，请在屏幕上输入手机号。");
+                        business_type = "query_traffic";
                     } else if (intent.find("package") != std::string::npos) {
-                        Speak("正在查询您的套餐信息。");
-                    } else if (intent.find("back") != std::string::npos || intent.find("home") != std::string::npos) {
-                        Speak("好的，已返回首页。");
+                        business_type = "query_package";
+                    } else if (intent.find("new_sim_card") != std::string::npos || intent.find("card") != std::string::npos) {
+                        business_type = "new_sim_card";
+                    } else if (intent == "back_home" || intent.find("back_home") != std::string::npos) {
+                        business_type = "back_home";
                     } else {
+                        business_type = intent;
                         Speak("好的，正在为您处理。");
                     }
+
+                    // 发布业务指令到 /voice_topic
+                    nlohmann::json voice_msg = {
+                        {"business_type", business_type},
+                        {"content", ""}
+                    };
+                    ROSManager::getInstance().publishVoiceTopic(voice_msg.dump());
+                    LOG_INFO("发布业务指令: %s", voice_msg.dump().c_str());
                 }
             }
             // 重置识别状态，准备下一句
@@ -456,6 +469,16 @@ void AvvtnCapture::handleAudioWake(avvtn_callback_data_t *data_p)
     // 发布唤醒事件到 /voice_wakeup 话题
     ROSManager::getInstance().publishVoiceWakeup(wake_str);
     
+    // 发布唤醒词到 /chat_history 话题
+    nlohmann::json chat_wake = {
+        {"speaker", "PERSON"},
+        {"content", "灵犀灵犀"}
+    };
+    ROSManager::getInstance().publishChatConversation(chat_wake.dump());
+
+    // 将唤醒词“灵犀灵犀”发送给LLM，闲聊式对话
+    ChatAndSpeak("灵犀灵犀");
+
     std::cout << "接收到唤醒事件: " << wake_str << std::endl;
     return;
 }

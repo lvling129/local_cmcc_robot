@@ -37,6 +37,12 @@ public:
 
     // 发布语音唤醒事件（topic: /voice_wakeup）
     void publishVoiceWakeup(const std::string& msg);
+
+    // 发布语音业务指令（topic: /voice_topic）
+    void publishVoiceTopic(const std::string& msg);
+
+    // 发布对话记录（topic: /chat_history）
+    void publishChatConversation(const std::string& msg);
     
     // 订阅话题
     void subscribeTopic(const std::string& topic_name, 
@@ -64,6 +70,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr chat_history_nostream_publisher_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr wakeup_detail_publisher_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr voice_wakeup_publisher_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr voice_topic_publisher_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr chat_conversation_publisher_;
 
     // 保存订阅者
     std::unordered_map<std::string, rclcpp::Subscription<std_msgs::msg::String>::SharedPtr> subscribers_;

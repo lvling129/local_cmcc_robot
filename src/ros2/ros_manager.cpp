@@ -25,6 +25,12 @@ void ROSManager::init(int argc, char const *argv[]) {
         // 语音唤醒发布器（无人服务厅）
         voice_wakeup_publisher_ = node_->create_publisher<std_msgs::msg::String>("voice_wake_topic", 10);
 
+        // 语音业务指令发布器
+        voice_topic_publisher_ = node_->create_publisher<std_msgs::msg::String>("voice_topic", 10);
+
+        // 对话记录发布器
+        chat_conversation_publisher_ = node_->create_publisher<std_msgs::msg::String>("chat_history", 10);
+
         // 创建ROS spin线程
         ros_spin_thread_ = std::thread([this]() {
             LOG_INFO("ROS2回调线程启动");
@@ -86,6 +92,14 @@ void ROSManager::publishWakeupDetail(const std::string& status_msg) {
 
 void ROSManager::publishVoiceWakeup(const std::string& msg) {
     publishMessage(voice_wakeup_publisher_, msg);
+}
+
+void ROSManager::publishVoiceTopic(const std::string& msg) {
+    publishMessage(voice_topic_publisher_, msg);
+}
+
+void ROSManager::publishChatConversation(const std::string& msg) {
+    publishMessage(chat_conversation_publisher_, msg);
 }
 
 void ROSManager::subscribeTopic(const std::string& topic_name,

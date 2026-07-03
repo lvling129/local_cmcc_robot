@@ -110,6 +110,7 @@ std::string SherpaAsr::GetResult()
     LOG_INFO("  事件:   %s", result->event ? result->event : "(无)");
 
     std::string text(result->text);
+    last_lang_ = (result->lang) ? result->lang : "";
     SherpaOnnxDestroyOfflineRecognizerResult(result);
     return text;
 }

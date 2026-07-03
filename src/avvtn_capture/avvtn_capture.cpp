@@ -1,5 +1,6 @@
 #include "avvtn_capture/avvtn_capture.h"
 #include "utils/Logger.hpp"
+#include "utils/json.hpp"
 #include "ros2/ros_manager.hpp"
 
 #include <fstream>
@@ -240,7 +241,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path, std::string aiui_cfg_path)
     }
 
     // 对话模型 (qwen3-8b)
-    ret = llm_chat_.Init("http://127.0.0.1:8080");
+    ret = llm_chat_.Init("http://192.168.8.103:8081");
     if (ret != 0)
     {
         LOG_ERROR("初始化对话 LLM 失败");
@@ -315,7 +316,7 @@ int AvvtnCapture::Destory()
 }
 
 // TTS 语音合成并播放
-void AvvtnCapture::Speak(const std::string& text, float speed)
+void AvvtnCapture::Speak(const std::string& text, float speed, bool append_mode)
 {
     if (!sherpa_tts_.IsInitialized()) {
         LOG_WARN("TTS 未初始化，无法合成语音");
@@ -327,14 +328,25 @@ void AvvtnCapture::Speak(const std::string& text, float speed)
         return;
     }
 
-    // 检查是否包含中文字符（UTF-8 中文范围 0xE4-0xE9 开头）
+    // 检查是否为中文内容（包含汉字或中文标点）
+    // 规则：有非 ASCII 字符且不含拉丁字母 → 中文；含拉丁字母则检查是否有汉字
     bool has_chinese = false;
+    bool has_non_ascii = false;
+    bool has_latin = false;
+    bool has_cjk = false;
     for (size_t i = 0; i < text.size(); ++i) {
         unsigned char c = static_cast<unsigned char>(text[i]);
-        if (c >= 0xE4 && c <= 0xE9) {
-            has_chinese = true;
-            break;
+        if (c >= 0x80) {
+            has_non_ascii = true;
+            if (c >= 0xE4 && c <= 0xE9) has_cjk = true;  // CJK 汉字范围
+        } else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            has_latin = true;
         }
+    }
+    if (has_non_ascii && !has_latin) {
+        has_chinese = true;       // 纯中文/中文标点，无英文
+    } else if (has_cjk) {
+        has_chinese = true;       // 混合内容但含汉字
     }
 
     if (!has_chinese) {
@@ -344,8 +356,10 @@ void AvvtnCapture::Speak(const std::string& text, float speed)
 
     LOG_INFO("TTS 播放: \"%s\"", text.c_str());
 
-    // 打断当前播放
-    audio_player_.Interrupt();
+    // 打断当前播放（流式追加时不打断）
+    if (!append_mode) {
+        audio_player_.Interrupt();
+    }
 
     // 流式合成：边合成边播放
     sherpa_tts_.Generate(text, [this](const AudioChunk& chunk, float progress) -> bool {
@@ -354,8 +368,63 @@ void AvvtnCapture::Speak(const std::string& text, float speed)
         return true;  // 继续合成
     }, speed);
 
-    // 通知播放结束
-    audio_player_.StreamEnd();
+    // 通知播放结束（追加模式不结束，由调用方控制）
+    if (!append_mode) {
+        audio_player_.StreamEnd();
+    }
+}
+
+void AvvtnCapture::ChatAndSpeak(const std::string& text)
+{
+    LOG_INFO("LLM 闲聊调用: \"%s\"", text.c_str());
+    auto sentence_buffer = std::make_shared<std::string>();
+    auto is_first_synthesis = std::make_shared<bool>(true);
+    llm_chat_.ChatAsync(text,
+        [this, sentence_buffer, is_first_synthesis](const std::string& chunk, bool is_done) -> bool {
+            if (!chunk.empty()) {
+                *sentence_buffer += chunk;
+                // 检查是否包含句子边界（累积到标点再合成）
+                bool has_boundary = (chunk.find("。") != std::string::npos ||
+                                     chunk.find("！") != std::string::npos ||
+                                     chunk.find("？") != std::string::npos ||
+                                     chunk.find("，") != std::string::npos ||
+                                     chunk.find("、") != std::string::npos ||
+                                     chunk.find("；") != std::string::npos);
+                if (has_boundary && sentence_buffer->size() >= 4) {
+                    LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence_buffer->c_str(), *is_first_synthesis);
+                    bool append = !(*is_first_synthesis);
+                    Speak(*sentence_buffer, 1.0f, append);
+                    *is_first_synthesis = false;
+                    sentence_buffer->clear();
+                }
+            }
+            return true;
+        },
+        [this, sentence_buffer, is_first_synthesis](const std::string& full_response) {
+            LOG_INFO("LLM 回复: %s", full_response.c_str());
+
+            // 发布 LLM 回复到 /chat_history 话题
+            nlohmann::json chat_llm = {
+                {"speaker", "ROBOT"},
+                {"content", full_response}
+            };
+            ROSManager::getInstance().publishChatConversation(chat_llm.dump());
+
+            // 合成剩余缓冲
+            if (!sentence_buffer->empty()) {
+                LOG_INFO("LLM 句子(剩余): \"%s\"", sentence_buffer->c_str());
+                bool append = !(*is_first_synthesis);
+                Speak(*sentence_buffer, 1.0f, append);
+            }
+            // 流式播放结束
+            audio_player_.StreamEnd();
+            nlohmann::json reply = {
+                {"speaker", "robot"},
+                {"text", full_response}
+            };
+            ROSManager::getInstance().publishChatHistory(reply.dump());
+        }
+    );
 }
 
 // 测试多模态降噪引擎
