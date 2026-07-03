@@ -123,12 +123,8 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
         LOG_INFO("初始化对话 LLM 成功 (port 8080)");
     }
 
-    // 5、初始化视频采集
-    // ret = video_cap_.Start(this, videoCaptureCallback);
-    // CHECK_RET(ret);
-
+    // 5、初始化音频采集
     LOG_INFO("初始化音频采集");
-    // 6、初始化音频采集
     ret = audio_cap_.Start(this, audioCaptureCallback);
     CHECK_RET(ret);
     if (0 != ret)
@@ -149,9 +145,6 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
 int AvvtnCapture::Destory()
 {
     int ret = 0;
-    // 1、停止视频采集
-    // ret = video_cap_.Stop();
-    // CHECK_RET(ret);
 
     // 清空全局实例指针，后续回调会因空指针检查而跳过
     g_avvtn_capture_instance = nullptr;
@@ -378,18 +371,6 @@ int AvvtnCapture::test_avvtn()
     return 0;
 }
 
-// 视频回调
-void AvvtnCapture::videoCaptureCallback(void *userdata, const void *image, int width, int height)
-{
-    AvvtnCapture *self                        = (AvvtnCapture *)userdata;
-    avvtn_interact_info_t avvtn_interact_info = {};
-    avvtn_interact_info.type                  = AVVTN_INTERACT_TYPE_FEED_VIDEO;
-    avvtn_interact_info.in.raw                = const_cast<void *>(image);
-    avvtn_interact_info.in.raw_size           = width * height * 3;
-    avvtn_api_interact(self->avvtn_cap_, &avvtn_interact_info);
-    return;
-}
-
 // 音频回调
 void AvvtnCapture::audioCaptureCallback(void *userdata, const void *audio, int len)
 {
@@ -419,12 +400,6 @@ int AvvtnCapture::avvtnCallback(avvtn_callback_data_t *data_p, void *user_data)
         case AVVTN_CALLBACK_TYPE_AUDIO_REC:
         {
             self->handleAudioRec(data_p);
-        }
-        break;
-        // 人脸识别回调，多模态模式下一直对外抛出
-        case AVVTN_CALLBACK_TYPE_FACE_REC:
-        {
-            // self->handleFaceRecognition(data_p);
         }
         break;
         // 唤醒事件回调，注意，一次唤醒会抛出两次，一次带角度，一次不带角度。

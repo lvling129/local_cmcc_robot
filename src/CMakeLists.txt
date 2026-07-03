@@ -1,5 +1,4 @@
 # 查找必要的依赖包
-find_package(OpenCV REQUIRED)
 
 # 设置编译选项
 set(PRJ_COMPILE_OPTIONS "")
@@ -14,7 +13,6 @@ add_executable(${PROJECT_NAME} ${SRC})
 
 # 设置包含目录
 target_include_directories(${PROJECT_NAME} PRIVATE
-  ${OpenCV_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}/../include
   ${CMAKE_CURRENT_LIST_DIR}/utils/jsoncpp
   ${CMAKE_CURRENT_LIST_DIR}
@@ -33,7 +31,6 @@ target_link_directories(${PROJECT_NAME} PRIVATE
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}
-  ${OpenCV_LIBS}
   udev
   portaudio
   asound

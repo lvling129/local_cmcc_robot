@@ -18,7 +18,6 @@
 #include "llm/llm_client.h"
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
-#include "video_capture/video_capture.h"
 // 错误检查宏，如果返回值不为0则直接返回该值
 #define CHECK_RET(ret) \
     if (ret != 0) return ret;
@@ -95,15 +94,6 @@ private:
     static AvvtnCapture* g_avvtn_capture_instance;
 private:
     /**
-     * @brief 视频采集回调函数（静态函数）
-     * @param userdata 用户数据指针，指向AvvtnCapture实例
-     * @param image 视频图像数据指针
-     * @param width 图像宽度
-     * @param height 图像高度
-     */
-    static void videoCaptureCallback(void *userdata, const void *image, int width, int height);
-
-    /**
      * @brief 音频采集回调函数（静态函数）
      * @param userdata 用户数据指针，指向AvvtnCapture实例
      * @param audio 音频数据指针
@@ -127,12 +117,6 @@ private:
      * @return 0表示成功，非0表示失败
      */
     int parseJsonAndCheckData(avvtn_callback_data_t *data_p, cJSON **json, cJSON **data);
-
-    /**
-     * @brief 处理人脸识别回调
-     * @param data_p 回调数据指针
-     */
-    void handleFaceRecognition(avvtn_callback_data_t *data_p);
 
     /**
      * @brief 处理音频CAE回调
@@ -195,9 +179,6 @@ private:
     int test_avvtn();
 
 private:
-    // 视频采集模块句柄，负责从摄像头读取视频数据
-    VideoCapture video_cap_;
-
     // 音频采集模块句柄，负责从麦克风读取音频数据
     AudioCapture audio_cap_;
 
@@ -221,10 +202,6 @@ private:
     LlmClient llm_chat_;     // 对话模型 (qwen3-8b, port 8080)
 
 private:
-    int scaling_factor_ = 2;    // 缩放因子
-    cv::Mat receive_image_;     // 接收到的原始图像
-    cv::Mat resized_image_;     // 缩放后的图像
-
     std::string wake_mode_ = "ivw";           // 唤醒模式
     bool is_sleeping = true;           //是否已经休眠，等待唤醒
 };
