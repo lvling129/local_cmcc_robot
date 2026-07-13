@@ -16,6 +16,10 @@
 #include "tts/sherpa_tts.h"
 #include "tts/audio_player.h"
 #include "llm/llm_client.h"
+#include "llm/remote_llm_client.h"
+
+// 0 = 本地 qwen3-8b, 1 = 远程 qwen
+#define USE_REMOTE_LLM 1
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
 // 错误检查宏，如果返回值不为0则直接返回该值
@@ -200,6 +204,9 @@ private:
     // 本地大模型客户端
     LlmClient llm_intent_;   // 意图识别模型 (qwen3-1.7b, port 8081)
     LlmClient llm_chat_;     // 对话模型 (qwen3-8b, port 8080)
+
+    // 远程闲聊模型客户端
+    RemoteLlmClient llm_remote_;  // 远程 qwen (10.33.225.63:9090)
 
 private:
     std::string wake_mode_ = "ivw";           // 唤醒模式

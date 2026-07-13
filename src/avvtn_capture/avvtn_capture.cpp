@@ -123,6 +123,24 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
         LOG_INFO("初始化对话 LLM 成功 (port 8080)");
     }
 
+    // 远程闲聊模型
+    ret = llm_remote_.Init("http://10.33.225.63:9090/agent/llm/openai", "qwen");
+    if (ret != 0)
+    {
+        LOG_ERROR("初始化远程闲聊 LLM 失败");
+    }
+    else
+    {
+        std::string chat_prompt = ReadPromptFile(prompt_dir + "/chat.prompt");
+        if (!chat_prompt.empty()) {
+            llm_remote_.SetSystemPrompt(chat_prompt);
+        }
+        llm_remote_.SetParams(0.7f, 2048);
+        LOG_INFO("初始化远程闲聊 LLM 成功 (http://10.33.225.63:9090)");
+    }
+
+    LOG_INFO("闲聊模型选择: %s", USE_REMOTE_LLM ? "远程 qwen" : "本地 qwen3-8b");
+
     // 5、初始化音频采集
     LOG_INFO("初始化音频采集");
     ret = audio_cap_.Start(this, audioCaptureCallback);
@@ -229,57 +247,65 @@ void AvvtnCapture::Speak(const std::string& text, float speed, bool append_mode)
 
 void AvvtnCapture::ChatAndSpeak(const std::string& text)
 {
-    LOG_INFO("LLM 闲聊调用: \"%s\"", text.c_str());
+#if USE_REMOTE_LLM
+    LOG_INFO("远程 LLM 闲聊调用: \"%s\"", text.c_str());
+#else
+    LOG_INFO("本地 LLM 闲聊调用: \"%s\"", text.c_str());
+#endif
+
     auto sentence_buffer = std::make_shared<std::string>();
     auto is_first_synthesis = std::make_shared<bool>(true);
-    llm_chat_.ChatAsync(text,
-        [this, sentence_buffer, is_first_synthesis](const std::string& chunk, bool is_done) -> bool {
-            if (!chunk.empty()) {
-                *sentence_buffer += chunk;
-                // 检查是否包含句子边界（累积到标点再合成）
-                bool has_boundary = (chunk.find("。") != std::string::npos ||
-                                     chunk.find("！") != std::string::npos ||
-                                     chunk.find("？") != std::string::npos ||
-                                     chunk.find("，") != std::string::npos ||
-                                     chunk.find("、") != std::string::npos ||
-                                     chunk.find("；") != std::string::npos);
-                if (has_boundary && sentence_buffer->size() >= 4) {
-                    LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence_buffer->c_str(), *is_first_synthesis);
-                    bool append = !(*is_first_synthesis);
-                    Speak(*sentence_buffer, 1.0f, append);
-                    *is_first_synthesis = false;
-                    sentence_buffer->clear();
-                }
-            }
-            return true;
-        },
-        [this, sentence_buffer, is_first_synthesis](const std::string& full_response) {
-            LOG_INFO("LLM 回复: %s", full_response.c_str());
 
-            // LLM 回复为空时不发布到 /chat_history
-            if (full_response.empty()) {
-                LOG_WARN("LLM 回复为空，跳过发布");
-                audio_player_.StreamEnd();
-                return;
-            }
-
-            // 发布 LLM 回复到 /chat_history 话题
-            nlohmann::json chat_llm = {
-                {"speaker", "ROBOT"},
-                {"content", full_response}
-            };
-            ROSManager::getInstance().publishChatConversation(chat_llm.dump());
-
-            // 合成剩余缓冲
-            if (!sentence_buffer->empty()) {
-                LOG_INFO("LLM 句子(剩余): \"%s\"", sentence_buffer->c_str());
+    // 流式回调：句子级 TTS 缓冲
+    auto stream_cb = [this, sentence_buffer, is_first_synthesis](const std::string& chunk, bool is_done) -> bool {
+        if (!chunk.empty()) {
+            *sentence_buffer += chunk;
+            bool has_boundary = (chunk.find("。") != std::string::npos ||
+                                 chunk.find("！") != std::string::npos ||
+                                 chunk.find("？") != std::string::npos ||
+                                 chunk.find("，") != std::string::npos ||
+                                 chunk.find("、") != std::string::npos ||
+                                 chunk.find("；") != std::string::npos);
+            if (has_boundary && sentence_buffer->size() >= 4) {
+                LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence_buffer->c_str(), *is_first_synthesis);
                 bool append = !(*is_first_synthesis);
                 Speak(*sentence_buffer, 1.0f, append);
+                *is_first_synthesis = false;
+                sentence_buffer->clear();
             }
-            // 流式播放结束
-            audio_player_.StreamEnd();
         }
-    );
+        return true;
+    };
+
+    // 完成回调：发布 ROS 消息 + 合成剩余缓冲
+    auto complete_cb = [this, sentence_buffer, is_first_synthesis](const std::string& full_response) {
+        LOG_INFO("LLM 回复: %s", full_response.c_str());
+
+        if (full_response.empty()) {
+            LOG_WARN("LLM 回复为空，跳过发布");
+            audio_player_.StreamEnd();
+            return;
+        }
+
+        nlohmann::json chat_llm = {
+            {"speaker", "ROBOT"},
+            {"content", full_response}
+        };
+        ROSManager::getInstance().publishChatConversation(chat_llm.dump());
+
+        if (!sentence_buffer->empty()) {
+            LOG_INFO("LLM 句子(剩余): \"%s\"", sentence_buffer->c_str());
+            bool append = !(*is_first_synthesis);
+            Speak(*sentence_buffer, 1.0f, append);
+        }
+        audio_player_.StreamEnd();
+    };
+
+#if USE_REMOTE_LLM
+    llm_remote_.ChatAsync(text, stream_cb, complete_cb);
+#else
+    llm_chat_.ChatAsync(text, stream_cb, complete_cb);
+#endif
 }
 
 // 测试多模态降噪引擎
