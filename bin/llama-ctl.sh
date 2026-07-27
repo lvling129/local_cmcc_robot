@@ -1,20 +1,20 @@
 #!/bin/bash
 # 双模型手动管控脚本 (Orin NX 16GB 专用 - 资源优化版)
 
-MODEL_DIR="/home/nvidia/llm-models"
+MODEL_DIR="/home/jetson/llm-models"
 LOG_DIR="$MODEL_DIR/logs"
-LLAMA_BIN="/home/nvidia/llama.cpp/build/bin/llama-server"
+LLAMA_BIN="/home/jetson/llama.cpp/build/bin/llama-server"
 
 # 模型文件
-INTENT_MODEL="$MODEL_DIR/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-CHAT_MODEL="$MODEL_DIR/qwen3-1.7b.Q4_K_M.gguf"
+INTENT_MODEL="$MODEL_DIR/qwen3-1.7b-instruct-q4_k_m.gguf"
+CHAT_MODEL="$MODEL_DIR/qwen3-4b-instruct-q4_k_m.gguf"
 
 start_intent() {
     if pgrep -f "$LLAMA_BIN.*8081" > /dev/null; then
-        echo "[意图1.5B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8081"))"
+        echo "[意图1.7B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8081"))"
         return 0
     fi
-    echo "[意图1.5B] 启动中..."
+    echo "[意图1.7B] 启动中..."
     nohup $LLAMA_BIN \
         -m "$INTENT_MODEL" \
         --host 127.0.0.1 --port 8081 \
@@ -25,19 +25,19 @@ start_intent() {
     
     sleep 2
     if pgrep -f "$LLAMA_BIN.*8081" > /dev/null; then
-        echo "[意图1.5B] ✅ 启动成功 (Port: 8081)"
+        echo "[意图1.7B] ✅ 启动成功 (Port: 8081)"
     else
-        echo "[意图1.5B] ❌ 启动失败，查看 $LOG_DIR/intent.log"
+        echo "[意图1.7B] ❌ 启动失败，查看 $LOG_DIR/intent.log"
         return 1
     fi
 }
 
 start_chat() {
     if pgrep -f "$LLAMA_BIN.*8080" > /dev/null; then
-        echo "[闲聊1.7B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8080"))"
+        echo "[闲聊4.0B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8080"))"
         return 0
     fi
-    echo "[闲聊1.7B] 启动中..."
+    echo "[闲聊4.0B] 启动中..."
     nohup $LLAMA_BIN \
         -m "$CHAT_MODEL" \
         --host 127.0.0.1 --port 8080 \
@@ -51,9 +51,9 @@ start_chat() {
     
     sleep 3
     if pgrep -f "$LLAMA_BIN.*8080" > /dev/null; then
-        echo "[闲聊1.7B] ✅ 启动成功 (Port: 8080)"
+        echo "[闲聊4.0B] ✅ 启动成功 (Port: 8080)"
     else
-        echo "[闲聊1.7B] ❌ 启动失败，查看 $LOG_DIR/chat.log"
+        echo "[闲聊4.0B] ❌ 启动失败，查看 $LOG_DIR/chat.log"
         return 1
     fi
 }

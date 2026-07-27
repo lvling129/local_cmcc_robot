@@ -11,6 +11,12 @@ file(GLOB_RECURSE SRC ${CMAKE_CURRENT_LIST_DIR}/*.cpp ${CMAKE_CURRENT_LIST_DIR}/
 # 添加可执行文件
 add_executable(${PROJECT_NAME} ${SRC})
 
+# 设置 RPATH，运行时查找 lib/arm 下的共享库
+set_target_properties(${PROJECT_NAME} PROPERTIES
+  BUILD_RPATH "${CMAKE_SOURCE_DIR}/lib/arm"
+  INSTALL_RPATH "$ORIGIN/../lib/arm"
+)
+
 # 设置包含目录
 target_include_directories(${PROJECT_NAME} PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../include

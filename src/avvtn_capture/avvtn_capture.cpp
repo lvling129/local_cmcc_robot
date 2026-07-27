@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <cstring>
 
 // 读取 prompt 文件
 static std::string ReadPromptFile(const std::string& path) {
@@ -16,6 +17,51 @@ static std::string ReadPromptFile(const std::string& path) {
     std::stringstream ss;
     ss << file.rdbuf();
     return ss.str();
+}
+
+// 清理 TTS 文本：去掉 markdown 符号和引号，避免读出符号或产生怪停顿
+static std::string CleanForTts(std::string text) {
+    static const char* drops[] = {"*", "#", "`", "\"", "“", "”", "‘", "’"};
+    for (const char* d : drops) {
+        size_t pos;
+        while ((pos = text.find(d)) != std::string::npos) {
+            text.erase(pos, strlen(d));
+        }
+    }
+    for (auto& c : text) {
+        if (c == '\n' || c == '\r' || c == '\t') c = ' ';
+    }
+    return text;
+}
+
+// 从 buffer 中提取一个完整句子（精确切到标点位置，残余保留在 buffer）
+// is_first: 首句用更短的逗号阈值，尽早出声降低响应延迟
+static std::string ExtractCompleteSentence(std::string& buffer, bool is_first) {
+    static const char* strong_marks[] = {"。", "！", "？", "；", "\n"};
+
+    // 找最后一个强边界标点（一次切出多个完整句，合成更连贯）
+    size_t split = std::string::npos;
+    for (const char* mark : strong_marks) {
+        size_t pos = buffer.rfind(mark);
+        if (pos != std::string::npos) {
+            size_t end = pos + strlen(mark);
+            if (split == std::string::npos || end > split) split = end;
+        }
+    }
+
+    // 无强边界时用逗号：首句 8 个汉字即切（快出声），后续 15 个汉字才切（避免切碎）
+    if (split == std::string::npos) {
+        size_t comma_threshold = is_first ? 24 : 45;
+        if (buffer.size() >= comma_threshold) {
+            size_t pos = buffer.rfind("，");
+            if (pos != std::string::npos) split = pos + 3;
+        }
+    }
+
+    if (split == std::string::npos || split < 6) return "";  // 至少 2 个汉字
+    std::string sentence = buffer.substr(0, split);
+    buffer.erase(0, split);
+    return sentence;
 }
 
 AvvtnCapture* AvvtnCapture::g_avvtn_capture_instance = nullptr;
@@ -65,11 +111,11 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
     ret = sherpa_tts_.Init(tts_model_dir, vocoder_path);
     if (ret != 0)
     {
-        LOG_ERROR("初始化 Matcha TTS 失败");
+        LOG_ERROR("初始化 TTS 失败");
     }
     else
     {
-        LOG_INFO("初始化 Matcha TTS 成功");
+        LOG_INFO("初始化 TTS 成功");
     }
 
     // 4、初始化音频播放器
@@ -87,7 +133,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
     // 4.1、初始化 LLM 客户端
     LOG_INFO("初始化 LLM 客户端");
 
-    const std::string prompt_dir = "/home/nvidia/local_cmcc_robot/resource/prompts";
+    const std::string prompt_dir = "/home/jetson/local_cmcc_robot/resource/prompts";
 
     // 意图识别模型 (qwen3-1.7b)
     ret = llm_intent_.Init("http://127.0.0.1:8081");
@@ -107,7 +153,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
     }
 
     // 对话模型 (qwen3-8b)
-    ret = llm_chat_.Init("http://192.168.8.103:8081");
+    ret = llm_chat_.Init("http://127.0.0.1:8080");
     if (ret != 0)
     {
         LOG_ERROR("初始化对话 LLM 失败");
@@ -256,22 +302,19 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
     auto sentence_buffer = std::make_shared<std::string>();
     auto is_first_synthesis = std::make_shared<bool>(true);
 
-    // 流式回调：句子级 TTS 缓冲
+    // 流式回调：句子级 TTS 缓冲（精确按标点位置切句）
     auto stream_cb = [this, sentence_buffer, is_first_synthesis](const std::string& chunk, bool is_done) -> bool {
         if (!chunk.empty()) {
             *sentence_buffer += chunk;
-            bool has_boundary = (chunk.find("。") != std::string::npos ||
-                                 chunk.find("！") != std::string::npos ||
-                                 chunk.find("？") != std::string::npos ||
-                                 chunk.find("，") != std::string::npos ||
-                                 chunk.find("、") != std::string::npos ||
-                                 chunk.find("；") != std::string::npos);
-            if (has_boundary && sentence_buffer->size() >= 4) {
-                LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence_buffer->c_str(), *is_first_synthesis);
+            // 循环提取：一个 chunk 可能带出多个完整句
+            while (true) {
+                std::string sentence = ExtractCompleteSentence(*sentence_buffer, *is_first_synthesis);
+                if (sentence.empty()) break;
+                sentence = CleanForTts(sentence);
+                LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence.c_str(), *is_first_synthesis);
                 bool append = !(*is_first_synthesis);
-                Speak(*sentence_buffer, 1.0f, append);
+                Speak(sentence, 1.0f, append);
                 *is_first_synthesis = false;
-                sentence_buffer->clear();
             }
         }
         return true;
@@ -294,9 +337,10 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
         ROSManager::getInstance().publishChatConversation(chat_llm.dump());
 
         if (!sentence_buffer->empty()) {
-            LOG_INFO("LLM 句子(剩余): \"%s\"", sentence_buffer->c_str());
+            std::string sentence = CleanForTts(*sentence_buffer);
+            LOG_INFO("LLM 句子(剩余): \"%s\"", sentence.c_str());
             bool append = !(*is_first_synthesis);
-            Speak(*sentence_buffer, 1.0f, append);
+            Speak(sentence, 1.0f, append);
         }
         audio_player_.StreamEnd();
     };

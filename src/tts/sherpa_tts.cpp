@@ -20,7 +20,6 @@ int SherpaTts::Init(const std::string& model_dir, const std::string& vocoder_pat
     std::string lexicon = model_dir + "/lexicon.txt";
     std::string tokens = model_dir + "/tokens.txt";
 
-    // 构建 rule_fsts
     rule_fsts_ = model_dir + "/phone.fst," + model_dir + "/date.fst," + model_dir + "/number.fst";
 
     LOG_INFO("初始化 Matcha TTS");
@@ -33,22 +32,20 @@ int SherpaTts::Init(const std::string& model_dir, const std::string& vocoder_pat
     SherpaOnnxOfflineTtsConfig config;
     memset(&config, 0, sizeof(config));
 
-    // Matcha 模型配置
     config.model.matcha.acoustic_model = acoustic_model.c_str();
     config.model.matcha.vocoder = vocoder_path.c_str();
     config.model.matcha.lexicon = lexicon.c_str();
     config.model.matcha.tokens = tokens.c_str();
-    config.model.matcha.data_dir = nullptr;  // 中文模型不需要 espeak-ng-data
+    config.model.matcha.data_dir = nullptr;
     config.model.matcha.noise_scale = 0.667f;
     config.model.matcha.length_scale = 1.0f;
 
     config.model.num_threads = num_threads;
     config.model.provider = "cpu";
     config.model.debug = 0;
-
     config.rule_fsts = rule_fsts_.c_str();
-    config.max_num_sentences = 2;
-    config.silence_scale = 0.2f;
+    config.max_num_sentences = -1;   // 一次批量处理全部句子，避免分批间隙
+    config.silence_scale = 0.08f;    // 句内停顿 ~80ms，更连贯
 
     tts_ = SherpaOnnxCreateOfflineTts(&config);
     if (!tts_) {
@@ -77,7 +74,6 @@ int SherpaTts::Generate(const std::string& text, TtsProgressCallback callback, f
 
     LOG_INFO("TTS 合成: \"%s\" (speed=%.2f)", text.c_str(), speed);
 
-    // 用于传递回调和状态的结构体
     struct CallbackContext {
         TtsProgressCallback user_callback;
         int sample_rate;
@@ -85,7 +81,6 @@ int SherpaTts::Generate(const std::string& text, TtsProgressCallback callback, f
     };
     CallbackContext ctx{callback, sample_rate_, false};
 
-    // C 风格回调函数
     auto c_callback = [](const float* samples, int32_t n, float progress, void* arg) -> int32_t {
         auto* ctx = static_cast<CallbackContext*>(arg);
         if (ctx->cancelled) return 0;
@@ -109,7 +104,7 @@ int SherpaTts::Generate(const std::string& text, TtsProgressCallback callback, f
     memset(&gen_config, 0, sizeof(gen_config));
     gen_config.speed = speed;
     gen_config.sid = 0;
-    gen_config.silence_scale = 0.2f;
+    gen_config.silence_scale = 0.08f;
 
     const SherpaOnnxGeneratedAudio* audio = SherpaOnnxOfflineTtsGenerateWithConfig(
         tts_, text.c_str(), &gen_config, c_callback, &ctx);
@@ -139,7 +134,7 @@ AudioChunk SherpaTts::GenerateFull(const std::string& text, float speed)
     memset(&gen_config, 0, sizeof(gen_config));
     gen_config.speed = speed;
     gen_config.sid = 0;
-    gen_config.silence_scale = 0.2f;
+    gen_config.silence_scale = 0.08f;
 
     const SherpaOnnxGeneratedAudio* audio = SherpaOnnxOfflineTtsGenerateWithConfig(
         tts_, text.c_str(), &gen_config, nullptr, nullptr);

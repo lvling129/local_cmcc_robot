@@ -19,7 +19,7 @@
 #include "llm/remote_llm_client.h"
 
 // 0 = 本地 qwen3-8b, 1 = 远程 qwen
-#define USE_REMOTE_LLM 1
+#define USE_REMOTE_LLM 0
 #include "avvtn_api/avvtn_api.h"
 #include "utils/cjson/cJSON.h"
 // 错误检查宏，如果返回值不为0则直接返回该值

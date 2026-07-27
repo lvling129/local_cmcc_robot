@@ -86,7 +86,7 @@ public:
 private:
     bool initialized_ = false;
     const SherpaOnnxOfflineTts* tts_ = nullptr;
-    int sample_rate_ = 22050;  // Matcha 默认输出采样率
+    int sample_rate_ = 22050;
     std::string rule_fsts_;    // 规则 FST 列表
 };
 

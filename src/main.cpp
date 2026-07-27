@@ -83,7 +83,7 @@ int main(int argc, char const *argv[])
     // 4. 初始化AvvtnCapture
     AvvtnCapture capture;
 
-    int ret = capture.Init("/home/nvidia/local_cmcc_robot/avvtn.cfg");
+    int ret = capture.Init("/home/jetson/local_cmcc_robot/avvtn.cfg");
     if (ret != 0)
     {
         LOG_FATAL("Avvtn capture init Error");

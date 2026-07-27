@@ -262,31 +262,48 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                 std::string intent_json = llm_intent_.Chat(final_text);
                 LOG_INFO("意图识别原始响应: [%s]", intent_json.c_str());
 
-                // 解析意图
-                std::string intent = "chat";  // 默认闲聊
-                size_t intent_pos = intent_json.find("\"intent\"");
-                if (intent_pos != std::string::npos) {
-                    size_t colon_pos = intent_json.find(":", intent_pos);
-                    size_t quote_start = intent_json.find("\"", colon_pos + 1);
-                    size_t quote_end = intent_json.find("\"", quote_start + 1);
-                    if (quote_start != std::string::npos && quote_end != std::string::npos) {
-                        intent = intent_json.substr(quote_start + 1, quote_end - quote_start - 1);
+                // 解析意图和置信度
+                std::string intent = "chat";
+                std::string confidence = "high";
+
+                // 提取 JSON 中 "key":"value" 的通用函数
+                auto extract_field = [&](const std::string& key) -> std::string {
+                    size_t pos = intent_json.find("\"" + key + "\"");
+                    if (pos == std::string::npos) return "";
+                    size_t colon = intent_json.find(":", pos);
+                    size_t q1 = intent_json.find("\"", colon + 1);
+                    size_t q2 = intent_json.find("\"", q1 + 1);
+                    if (q1 != std::string::npos && q2 != std::string::npos) {
+                        return intent_json.substr(q1 + 1, q2 - q1 - 1);
                     }
+                    return "";
+                };
+
+                std::string parsed_intent = extract_field("intent");
+                std::string parsed_confidence = extract_field("confidence");
+                if (!parsed_intent.empty()) {
+                    intent = parsed_intent;
                 } else {
                     LOG_WARN("意图识别未返回有效JSON，默认闲聊");
                 }
-                LOG_INFO("解析意图: %s", intent.c_str());
+                if (!parsed_confidence.empty()) {
+                    confidence = parsed_confidence;
+                }
+                LOG_INFO("解析意图: %s, 置信度: %s", intent.c_str(), confidence.c_str());
 
-                // 灵活匹配意图（小模型可能返回变体如 query_bill 而非 query_balance）
-                bool is_chat = (intent == "chat" ||
-                               intent.find("chat") != std::string::npos ||
-                               intent.find("闲聊") != std::string::npos);
-
-                if (is_chat) {
-                    // 闲聊：发送给对话模型，流式回复触发 TTS（句子级缓冲）
+                // 低置信度兜底：视为闲聊，让对话模型处理
+                if (confidence == "low") {
+                    LOG_INFO("置信度低，视为闲聊，调用对话模型");
+                    ChatAndSpeak(final_text);
+                }
+                // 闲聊意图
+                else if (intent == "chat" ||
+                         intent.find("chat") != std::string::npos ||
+                         intent.find("闲聊") != std::string::npos) {
                     LOG_INFO("意图: 闲聊，调用对话模型");
                     ChatAndSpeak(final_text);
-                } else {
+                }
+                else {
                     // 业务指令：内部处理，不触发对话模型
                     LOG_INFO("意图: %s，业务处理", intent.c_str());
 
@@ -300,8 +317,12 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                         business_type = "query_package";
                     } else if (intent.find("new_sim_card") != std::string::npos || intent.find("card") != std::string::npos) {
                         business_type = "new_sim_card";
+                    } else if (intent.find("knowledge") != std::string::npos) {
+                        business_type = "knowledge";
                     } else if (intent == "back_home" || intent.find("back_home") != std::string::npos) {
                         business_type = "back_home";
+                    } else if (intent == "continue_current" || intent.find("continue") != std::string::npos) {
+                        business_type = "continue_current";
                     } else {
                         business_type = intent;
                         Speak("好的，正在为您处理。");
@@ -310,7 +331,7 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                     // 发布业务指令到 /voice_topic
                     nlohmann::json voice_msg = {
                         {"business_type", business_type},
-                        {"content", ""}
+                        {"content", final_text}
                     };
                     ROSManager::getInstance().publishVoiceTopic(voice_msg.dump());
                     LOG_INFO("发布业务指令: %s", voice_msg.dump().c_str());
@@ -378,7 +399,7 @@ void AvvtnCapture::handleTouchWake()
 
     is_sleeping = false;
 
-    // system("ffplay -autoexit -nodisp -ar 24000 -ac 1 -f f32le /home/nvidia/local_cmcc_robot/bin/output.pcm > /dev/null 2>&1 &");
+    // system("ffplay -autoexit -nodisp -ar 24000 -ac 1 -f f32le /home/jetson/local_cmcc_robot/bin/output.pcm > /dev/null 2>&1 &");
 
     LOG_INFO("触摸唤醒已执行");
 }

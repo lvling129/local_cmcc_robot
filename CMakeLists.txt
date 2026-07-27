@@ -21,8 +21,6 @@ endif()
 #     add_link_options(-fsanitize=address)
 # endif()
 
-add_subdirectory(src)
-
 # 查找ROS2依赖
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -31,6 +29,7 @@ find_package(std_msgs REQUIRED)
 # 查找libcurl
 find_package(CURL REQUIRED)
 
+add_subdirectory(src)
 
 # 链接库到目标
 target_link_libraries(${PROJECT_NAME} CURL::libcurl)
