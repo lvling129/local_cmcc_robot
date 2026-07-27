@@ -92,7 +92,9 @@ private:
     std::thread playback_thread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> playing_{false};
-    std::atomic<bool> interrupted_{false};
+    // 打断计数器：每次 Interrupt 自增（只增不减），
+    // 播放线程据此废弃正在写入的旧音频块
+    std::atomic<uint32_t> interrupt_count_{0};
 
     std::queue<std::vector<int16_t>> audio_queue_;
     std::mutex queue_mutex_;

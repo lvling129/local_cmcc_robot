@@ -233,7 +233,7 @@ int AvvtnCapture::Destory()
 }
 
 // TTS 语音合成并播放
-void AvvtnCapture::Speak(const std::string& text, float speed, bool append_mode)
+void AvvtnCapture::Speak(const std::string& text, float speed, bool append_mode, uint64_t session_id)
 {
     if (!sherpa_tts_.IsInitialized()) {
         LOG_WARN("TTS 未初始化，无法合成语音");
@@ -273,21 +273,33 @@ void AvvtnCapture::Speak(const std::string& text, float speed, bool append_mode)
 
     LOG_INFO("TTS 播放: \"%s\"", text.c_str());
 
-    // 打断当前播放（流式追加时不打断）
+    // 直接调用（非 ChatAndSpeak 流式）：打断当前播放并使旧 LLM 会话失效，
+    // 防止旧 LLM 流的 stream_cb 继续推送音频到队列
     if (!append_mode) {
+        if (session_id == 0) {
+            // 外部直接 TTS：使旧 LLM 回调失效
+            ++chat_session_id_;
+        }
         audio_player_.Interrupt();
     }
 
+    // 记录当前会话号，合成期间若会话变更则中止（新提问或新直接 TTS 到达）
+    uint64_t my_session = chat_session_id_.load();
+
     // 流式合成：边合成边播放
-    sherpa_tts_.Generate(text, [this](const AudioChunk& chunk, float progress) -> bool {
-        // 将音频块送入播放器
+    sherpa_tts_.Generate(text, [this, my_session](const AudioChunk& chunk, float progress) -> bool {
+        // 会话已变更（新的提问或直接 TTS 打断）：中止合成，不再推送
+        if (chat_session_id_.load() != my_session) return false;
         audio_player_.StreamPush(chunk.samples.data(), chunk.samples.size());
         return true;  // 继续合成
     }, speed);
 
     // 通知播放结束（追加模式不结束，由调用方控制）
     if (!append_mode) {
-        audio_player_.StreamEnd();
+        // 会话已变更时不要设置 stream_ended_（新会话自己管理）
+        if (chat_session_id_.load() == my_session) {
+            audio_player_.StreamEnd();
+        }
     }
 }
 
@@ -299,11 +311,20 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
     LOG_INFO("本地 LLM 闲聊调用: \"%s\"", text.c_str());
 #endif
 
+    // 新提问到达：会话号自增使旧 LLM 回调失效，并立即打断清空正在播放的旧回答
+    uint64_t session_id = ++chat_session_id_;
+    audio_player_.Interrupt();
+
     auto sentence_buffer = std::make_shared<std::string>();
     auto is_first_synthesis = std::make_shared<bool>(true);
 
     // 流式回调：句子级 TTS 缓冲（精确按标点位置切句）
-    auto stream_cb = [this, sentence_buffer, is_first_synthesis](const std::string& chunk, bool is_done) -> bool {
+    auto stream_cb = [this, sentence_buffer, is_first_synthesis, session_id](const std::string& chunk, bool is_done) -> bool {
+        // 会话已过期（用户有了新提问）：丢弃并中止旧 LLM 流
+        if (chat_session_id_.load() != session_id) {
+            LOG_WARN("丢弃过期 LLM 流式数据 (session {}, current {})", session_id, chat_session_id_.load());
+            return false;
+        }
         if (!chunk.empty()) {
             *sentence_buffer += chunk;
             // 循环提取：一个 chunk 可能带出多个完整句
@@ -313,7 +334,7 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
                 sentence = CleanForTts(sentence);
                 LOG_INFO("LLM 句子: \"%s\" (first=%d)", sentence.c_str(), *is_first_synthesis);
                 bool append = !(*is_first_synthesis);
-                Speak(sentence, 1.0f, append);
+                Speak(sentence, 1.0f, append, session_id);
                 *is_first_synthesis = false;
             }
         }
@@ -321,7 +342,12 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
     };
 
     // 完成回调：发布 ROS 消息 + 合成剩余缓冲
-    auto complete_cb = [this, sentence_buffer, is_first_synthesis](const std::string& full_response) {
+    auto complete_cb = [this, sentence_buffer, is_first_synthesis, session_id](const std::string& full_response) {
+        // 会话已过期：丢弃，不再合成剩余文本也不发布消息
+        if (chat_session_id_.load() != session_id) {
+            LOG_WARN("丢弃过期 LLM 完成回调 (session {}, current {})", session_id, chat_session_id_.load());
+            return;
+        }
         LOG_INFO("LLM 回复: %s", full_response.c_str());
 
         if (full_response.empty()) {
@@ -340,7 +366,7 @@ void AvvtnCapture::ChatAndSpeak(const std::string& text)
             std::string sentence = CleanForTts(*sentence_buffer);
             LOG_INFO("LLM 句子(剩余): \"%s\"", sentence.c_str());
             bool append = !(*is_first_synthesis);
-            Speak(sentence, 1.0f, append);
+            Speak(sentence, 1.0f, append, session_id);
         }
         audio_player_.StreamEnd();
     };

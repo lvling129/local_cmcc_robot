@@ -10,6 +10,8 @@
 
 #include <iostream>
 #include <string>
+#include <atomic>
+#include <cstdint>
 
 #include "audio_capture/audio_capture.h"
 #include "asr/sherpa_asr.h"
@@ -79,7 +81,7 @@ public:
      * @param speed 语速，默认 1.0
      * @param append_mode 追加模式，true=不打断当前播放（流式追加用）
      */
-    void Speak(const std::string& text, float speed = 1.0f, bool append_mode = false);
+    void Speak(const std::string& text, float speed = 1.0f, bool append_mode = false, uint64_t session_id = 0);
 
     /**
      * @brief 发送文本给 LLM 闲聊模型，流式回复触发 TTS 播放
@@ -211,6 +213,9 @@ private:
 private:
     std::string wake_mode_ = "ivw";           // 唤醒模式
     bool is_sleeping = true;           //是否已经休眠，等待唤醒
+
+    // LLM 会话计数器：每次 ChatAndSpeak 自增，过期会话的 LLM 回调直接丢弃
+    std::atomic<uint64_t> chat_session_id_{0};
 };
 
 #endif

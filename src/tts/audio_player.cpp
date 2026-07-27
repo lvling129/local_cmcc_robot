@@ -97,7 +97,6 @@ int AudioPlayer::Play(const float* samples, int num_samples)
         std::lock_guard<std::mutex> lock(queue_mutex_);
         while (!audio_queue_.empty()) audio_queue_.pop();
         stream_ended_ = false;
-        interrupted_ = false;
 
         // 转换为 int16
         std::vector<int16_t> pcm_data(num_samples);
@@ -127,8 +126,6 @@ int AudioPlayer::StreamPush(const float* samples, int num_samples)
 
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
-        if (interrupted_) return 0;  // 已被打断，丢弃
-
         audio_queue_.push(std::move(pcm_data));
         if (!playing_) {
             playing_ = true;
@@ -150,7 +147,10 @@ void AudioPlayer::StreamEnd()
 
 void AudioPlayer::Interrupt()
 {
-    interrupted_ = true;
+    // 自增打断计数（只增不减）：播放线程正在写入的旧音频块会被废弃。
+    // 不能用"置位后立刻复位"的布尔标志——播放线程阻塞在 snd_pcm_writei 时，
+    // 复位后它复查会误判为未打断，把旧块重新写入 ALSA（旧回答"复活"）
+    ++interrupt_count_;
 
     // 清空队列
     {
@@ -160,14 +160,13 @@ void AudioPlayer::Interrupt()
     }
     queue_cv_.notify_one();
 
-    // 重置 PCM
+    // 重置 PCM：丢弃硬件缓冲中的剩余音频
     if (pcm_) {
         snd_pcm_drop(pcm_);
         snd_pcm_prepare(pcm_);
     }
 
     playing_ = false;
-    interrupted_ = false;
 }
 
 void AudioPlayer::Wait()
@@ -201,11 +200,14 @@ void AudioPlayer::PlaybackThread()
             audio_queue_.pop();
         }
 
+        // 取块时记录打断计数：写入期间一旦发生 Interrupt，本块立即废弃
+        uint32_t ic = interrupt_count_.load();
+
         // 写入 ALSA（int16 格式）
-        if (!pcm_data.empty() && pcm_ && !interrupted_) {
+        if (!pcm_data.empty() && pcm_ && ic == interrupt_count_.load()) {
             int written = 0;
             int total = pcm_data.size();
-            while (written < total && !interrupted_) {
+            while (written < total && ic == interrupt_count_.load()) {
                 int frames = snd_pcm_writei(pcm_, pcm_data.data() + written, total - written);
                 if (frames < 0) {
                     frames = snd_pcm_recover(pcm_, frames, 0);
