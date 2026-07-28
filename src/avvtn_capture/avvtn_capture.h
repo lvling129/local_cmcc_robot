@@ -205,7 +205,7 @@ private:
 
     // 本地大模型客户端
     LlmClient llm_intent_;   // 意图识别模型 (qwen3-1.7b, port 8081)
-    LlmClient llm_chat_;     // 对话模型 (qwen3-8b, port 8080)
+    LlmClient llm_chat_;     // 对话模型 (qwen3-8b, port 8082)
 
     // 远程闲聊模型客户端
     RemoteLlmClient llm_remote_;  // 远程 qwen (10.33.225.63:9090)

@@ -19,9 +19,10 @@ static std::string ReadPromptFile(const std::string& path) {
     return ss.str();
 }
 
-// 清理 TTS 文本：去掉 markdown 符号和引号，避免读出符号或产生怪停顿
+// 清理 TTS 文本：去掉 markdown 符号、引号和 emoji，避免读出符号或产生怪停顿
 static std::string CleanForTts(std::string text) {
-    static const char* drops[] = {"*", "#", "`", "\"", "“", "”", "‘", "’"};
+    static const char* drops[] = {"*", "#", "`", "\"", "“", "”", "‘", "’",
+                                  "（", "）", "(", ")", "[", "]", "{", "}"};
     for (const char* d : drops) {
         size_t pos;
         while ((pos = text.find(d)) != std::string::npos) {
@@ -31,7 +32,29 @@ static std::string CleanForTts(std::string text) {
     for (auto& c : text) {
         if (c == '\n' || c == '\r' || c == '\t') c = ' ';
     }
-    return text;
+    // 去掉 4 字节 UTF-8 序列（emoji 等补充平面字符，TTS 无法处理）
+    std::string result;
+    result.reserve(text.size());
+    for (size_t i = 0; i < text.size();) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c >= 0xF0) {
+            i += 4;  // 跳过 4 字节序列（emoji 等）
+        } else if (c >= 0xE0) {
+            result.append(text, i, 3);
+            i += 3;
+        } else if (c >= 0xC0) {
+            result.append(text, i, 2);
+            i += 2;
+        } else {
+            result += text[i];
+            i += 1;
+        }
+    }
+    // 去掉前后空白
+    size_t start = result.find_first_not_of(" \t\r\n");
+    size_t end = result.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    return result.substr(start, end - start + 1);
 }
 
 // 从 buffer 中提取一个完整句子（精确切到标点位置，残余保留在 buffer）
@@ -153,7 +176,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
     }
 
     // 对话模型 (qwen3-8b)
-    ret = llm_chat_.Init("http://127.0.0.1:8080");
+    ret = llm_chat_.Init("http://127.0.0.1:8082");
     if (ret != 0)
     {
         LOG_ERROR("初始化对话 LLM 失败");
@@ -166,7 +189,7 @@ int AvvtnCapture::Init(std::string avvtn_cfg_path)
             LOG_INFO("加载对话 prompt: %s/chat.prompt", prompt_dir.c_str());
         }
         llm_chat_.SetParams(0.7f, 512);
-        LOG_INFO("初始化对话 LLM 成功 (port 8080)");
+        LOG_INFO("初始化对话 LLM 成功 (port 8082)");
     }
 
     // 远程闲聊模型

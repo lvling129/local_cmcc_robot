@@ -293,8 +293,9 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
 
                 // 低置信度兜底：视为闲聊，让对话模型处理
                 if (confidence == "low") {
-                    LOG_INFO("置信度低，视为闲聊，调用对话模型");
-                    ChatAndSpeak(final_text);
+                    // LOG_INFO("置信度低，视为闲聊，调用对话模型");
+                    LOG_INFO("置信度低，暂不处理，只记录日志");
+                    // ChatAndSpeak(final_text);
                 }
                 // 闲聊意图
                 else if (intent == "chat" ||
@@ -368,17 +369,25 @@ void AvvtnCapture::handleAudioWake(avvtn_callback_data_t *data_p)
     std::string wake_str = std::string((char *)data_p->data, data_p->data_size);
     LOG_INFO("AVVTN接收到唤醒语音: %s", wake_str.c_str());
 
-    if (is_sleeping == false)
-    {
-        LOG_INFO("AVVTN已处于唤醒状态，不执行唤醒");
-        return;
+    // 只处理 wakeup，跳过 wakeup_detail
+    try {
+        auto wake_json = nlohmann::json::parse(wake_str);
+        std::string msg_type = wake_json.value("msg_type", "");
+        if (msg_type == "wakeup_detail") {
+            LOG_INFO("跳过 wakeup_detail 消息");
+            return;
+        }
+    } catch (...) {
+        LOG_WARN("唤醒消息JSON解析失败，按默认流程处理");
     }
 
-    is_sleeping = false;
+    if (is_sleeping == true)
+    {
+        // 发布唤醒事件到 /voice_wakeup 话题
+        ROSManager::getInstance().publishVoiceWakeup(wake_str);
+        is_sleeping = false;
+    }
 
-    // 发布唤醒事件到 /voice_wakeup 话题
-    ROSManager::getInstance().publishVoiceWakeup(wake_str);
-    
     // 发布唤醒词到 /chat_history 话题
     nlohmann::json chat_wake = {
         {"speaker", "PERSON"},

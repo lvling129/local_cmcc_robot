@@ -33,14 +33,14 @@ start_intent() {
 }
 
 start_chat() {
-    if pgrep -f "$LLAMA_BIN.*8080" > /dev/null; then
-        echo "[闲聊4.0B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8080"))"
+    if pgrep -f "$LLAMA_BIN.*8082" > /dev/null; then
+        echo "[闲聊4.0B] 已在运行 (PID: $(pgrep -f "$LLAMA_BIN.*8082"))"
         return 0
     fi
     echo "[闲聊4.0B] 启动中..."
     nohup $LLAMA_BIN \
         -m "$CHAT_MODEL" \
-        --host 127.0.0.1 --port 8080 \
+        --host 127.0.0.1 --port 8082 \
         -c 2048 -ngl 99 \
         --cache-type-k q4_0 --cache-type-v q4_0 \
         --flash-attn on \
@@ -50,8 +50,8 @@ start_chat() {
         > "$LOG_DIR/chat.log" 2>&1 &
     
     sleep 3
-    if pgrep -f "$LLAMA_BIN.*8080" > /dev/null; then
-        echo "[闲聊4.0B] ✅ 启动成功 (Port: 8080)"
+    if pgrep -f "$LLAMA_BIN.*8082" > /dev/null; then
+        echo "[闲聊4.0B] ✅ 启动成功 (Port: 8082)"
     else
         echo "[闲聊4.0B] ❌ 启动失败，查看 $LOG_DIR/chat.log"
         return 1
@@ -60,15 +60,15 @@ start_chat() {
 
 stop_all() {
     echo "停止所有 Qwen3 服务..."
-    pkill -f "$LLAMA_BIN.*808[01]"
+    pkill -f "$LLAMA_BIN.*808[12]"
     sleep 2
-    pgrep -f "$LLAMA_BIN.*808[01]" > /dev/null && pkill -9 -f "$LLAMA_BIN.*808[01]"
+    pgrep -f "$LLAMA_BIN.*808[12]" > /dev/null && pkill -9 -f "$LLAMA_BIN.*808[12]"
     echo "✅ 所有服务已停止"
 }
 
 status() {
     echo "=== Qwen3 双模型状态 ==="
-    for port in 8081 8080; do
+    for port in 8081 8082; do
         name=$([ "$port" = "8081" ] && echo "意图(1.5B)" || echo "闲聊(1.7B)")
         pid=$(pgrep -f "$LLAMA_BIN.*$port")
         [ -n "$pid" ] && echo "  $name : ✅ PID:$pid Port:$port" || echo "  $name : ⏹ 已停止"

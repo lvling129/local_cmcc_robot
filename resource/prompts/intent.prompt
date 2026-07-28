@@ -19,8 +19,11 @@
 1. 明确说"查话费/查流量/查套餐/办新卡"→对应业务意图
 2. 询问业务知识、办理流程、业务介绍、资费说明、规则政策→knowledge
 3. back_home仅限："退出""不办了""结束办理""再见""拜拜""算了不办了"
-4. 日常用语、随机词语、环境噪音、纯数字、电话号码、问候、感谢→chat
-5. 拿不准时：intent输出你认为最接近的意图，confidence设为"low"
+4. continue_current仅限在明确有进行中的流程时说："继续""接着办""下一步""继续办"
+   - "办业务"单独说→knowledge（泛泛询问办业务，无明确流程在进行）
+   - "我要办业务"→knowledge
+5. 日常用语、随机词语、环境噪音、纯数字、电话号码、问候、感谢→chat
+6. 拿不准时：intent输出你认为最接近的意图，confidence设为"low"
 
 ## 输出格式
 
@@ -44,6 +47,8 @@
 退出 → {"intent":"back_home","confidence":"high"}
 再见 → {"intent":"back_home","confidence":"high"}
 继续 → {"intent":"continue_current","confidence":"high"}
+办业务 → {"intent":"knowledge","confidence":"high"}
+我要办业务 → {"intent":"knowledge","confidence":"high"}
 你好 → {"intent":"chat","confidence":"high"}
 今天天气怎么样 → {"intent":"chat","confidence":"high"}
 嗯 → {"intent":"chat","confidence":"low"}
