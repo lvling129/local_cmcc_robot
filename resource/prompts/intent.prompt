@@ -18,7 +18,9 @@
 
 1. 明确说"查话费/查流量/查套餐/办新卡"→对应业务意图
 2. 询问业务知识、办理流程、业务介绍、资费说明、规则政策→knowledge
-3. back_home仅限："退出""不办了""结束办理""再见""拜拜""算了不办了"
+3. back_home仅限明确表达"离开/结束本次服务"的句子："退出""不办了""结束办理""再见""拜拜""算了不办了""不用了谢谢"
+   - 注意："停""那要停""停下来""停一下"是对话中的口语表达，不是退出意图→chat
+   - 必须是对本系统/本次服务说再见才算back_home
 4. continue_current仅限在明确有进行中的流程时说："继续""接着办""下一步""继续办"
    - "办业务"单独说→knowledge（泛泛询问办业务，无明确流程在进行）
    - "我要办业务"→knowledge
@@ -46,6 +48,7 @@
 不办了 → {"intent":"back_home","confidence":"high"}
 退出 → {"intent":"back_home","confidence":"high"}
 再见 → {"intent":"back_home","confidence":"high"}
+停 → {"intent":"chat","confidence":"low"}
 继续 → {"intent":"continue_current","confidence":"high"}
 办业务 → {"intent":"knowledge","confidence":"high"}
 我要办业务 → {"intent":"knowledge","confidence":"high"}

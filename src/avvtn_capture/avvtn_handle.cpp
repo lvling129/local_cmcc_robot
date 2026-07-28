@@ -320,6 +320,7 @@ void AvvtnCapture::handleAudioRec(avvtn_callback_data_t *data_p)
                         business_type = "new_sim_card";
                     } else if (intent.find("knowledge") != std::string::npos) {
                         business_type = "knowledge";
+                        Speak("您的请求需要知识库支持，正在开发中。");
                     } else if (intent == "back_home" || intent.find("back_home") != std::string::npos) {
                         business_type = "back_home";
                     } else if (intent == "continue_current" || intent.find("continue") != std::string::npos) {
